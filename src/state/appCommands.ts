@@ -187,6 +187,12 @@ export function appCommands(): AppCommand[] {
       global: true,
       run: () => useStore.getState().setTypewriter(!useStore.getState().typewriter),
     },
+    {
+      id: "view.fullWidth",
+      title: s.fullWidth ? "Use page margins" : "Use full width",
+      keywords: "full width margins layout page column wide",
+      run: () => useStore.getState().setFullWidth(!useStore.getState().fullWidth),
+    },
     { id: "text.bigger", title: "Increase text size", keywords: "zoom in font larger", keys: "Mod+=", global: true, run: () => useStore.getState().bumpFontSize(1) },
     { id: "text.smaller", title: "Decrease text size", keywords: "zoom out font smaller", keys: "Mod+-", global: true, run: () => useStore.getState().bumpFontSize(-1) },
     { id: "text.reset", title: "Reset text size", keywords: "zoom actual size font", run: () => useStore.getState().setFontSize(16) },

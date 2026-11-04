@@ -22,6 +22,7 @@ database, and nothing moves on screen when you click into a line.
 | Focus | Focus mode dims everything but the line you are on; typewriter mode keeps the caret near the middle of the window |
 | Navigation | Command palette, quick switcher with recent notes and full-text search that jumps to the match, back and forward history, caret and scroll position remembered per note, relative links like `[x](Other.md#heading)` open in the app |
 | Vault | Open any folder, file tree with notes and folders, drag and drop to move, rename inline, delete to the trash with a confirmation, copy path, show in Finder, resizable sidebar, autosave with atomic writes, reload when a file changes on disk |
+| Layout | Full width or a centered column with margins (top bar button, Settings, or the palette), gutters that scale with the editor's width, hanging indents for wrapped list items and real nesting, tighter spacing between blocks, tables that wrap or scroll inside their own box, and panels that step aside in small windows and open as overlays instead |
 | Appearance | Light and dark palettes that follow the system, sans, serif or mono text, adjustable text size and line width, smooth transitions throughout that switch off when the system asks for reduced motion |
 
 ## Keyboard shortcuts
@@ -119,6 +120,9 @@ docs/research.md  the research and design notes this project was built from
 selection, or focus changes.
 
 - Heading size and weight come from line decorations that apply in both states.
+- List items are padded by nesting depth plus a fixed-width marker box, and
+  the first line is pulled back by the marker width, so wrapped lines hang
+  under the text. The raw indentation is hidden in both states.
 - Inline delimiters (`**`, `*`, `` ` ``, `[`, `](url)`) are replaced with empty
   decorations unless a selection range touches the element they belong to.
 - Block delimiters (`#`, `>`) are replaced when the caret is off the line and

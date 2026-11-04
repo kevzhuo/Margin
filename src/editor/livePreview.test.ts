@@ -158,29 +158,44 @@ describe("blockquotes", () => {
 });
 
 describe("lists", () => {
-  it("replaces bullets with widgets unless the line is active", () => {
+  it("replaces bullets (and the space after them) with widgets unless the line is active", () => {
     const doc = "- item\n- two";
     const d = decos(doc, doc.length);
-    expect(d.some((x) => lineClass(x, "cm-md-li") && x.from === 0)).toBe(true);
-    expect(at(d, 0, 1).some((x) => x.widget === "BulletWidget")).toBe(true);
-    expect(at(d, 7, 8).some((x) => markClass(x, "cm-md-listmark"))).toBe(true);
-    expect(at(d, 7, 8).some((x) => x.widget === "BulletWidget")).toBe(false);
+    expect(d.some((x) => lineClass(x, "cm-md-li") && lineClass(x, "cm-md-li-ul") && x.from === 0)).toBe(true);
+    expect(at(d, 0, 2).some((x) => x.widget === "BulletWidget")).toBe(true);
+    expect(at(d, 7, 9).some((x) => markClass(x, "cm-md-listmark"))).toBe(true);
+    expect(at(d, 7, 9).some((x) => x.widget === "BulletWidget")).toBe(false);
   });
-  it("keeps ordered numbers visible", () => {
+  it("keeps ordered numbers visible in a fixed-width box", () => {
     const d = decos("1. one\n2. two", 13);
-    expect(at(d, 0, 2).some((x) => markClass(x, "cm-md-olmark"))).toBe(true);
+    expect(at(d, 0, 3).some((x) => markClass(x, "cm-md-olmark"))).toBe(true);
+    expect(d.some((x) => lineClass(x, "cm-md-li-ol") && x.from === 0)).toBe(true);
     expect(d.some((x) => x.widget === "BulletWidget")).toBe(false);
   });
-  it("renders nested bullets with depth", () => {
+  it("nests by depth and hides the raw indentation in both states", () => {
     const doc = "- a\n  - b";
-    const d = decos(doc, 0);
-    expect(d.some((x) => lineClass(x, "cm-md-li-1") && x.from === 4)).toBe(true);
-    expect(at(d, 6, 7).some((x) => x.widget === "BulletWidget")).toBe(true);
+    for (const caret of [0, doc.length]) {
+      const d = decos(doc, caret);
+      const nested = d.find((x) => lineClass(x, "cm-md-li-1") && x.from === 4)!;
+      expect(nested.attrs.style).toBe("--li-depth: 1");
+      expect(at(d, 4, 6).some((x) => x.kind === "replace" && !x.widget)).toBe(true);
+    }
+    const top = decos(doc, 0).find((x) => lineClass(x, "cm-md-li-0"))!;
+    expect(top.attrs.style).toBe("--li-depth: 0");
+    expect(at(decos(doc, 0), 6, 8).some((x) => x.widget === "BulletWidget")).toBe(true);
+  });
+  it("indents continuation lines of an item like the item itself", () => {
+    const doc = "- first line\n  continues here\n- next";
+    const d = decos(doc, doc.length);
+    const cont = d.find((x) => lineClass(x, "cm-md-li-cont") && x.from === 13)!;
+    expect(cont.attrs.style).toBe("--li-depth: 0");
+    expect(at(d, 13, 15).some((x) => x.kind === "replace" && !x.widget)).toBe(true);
   });
 });
 
 describe("tasks", () => {
   const doc = "- [ ] todo\n- [x] done\n\nz";
+  const source = (x: { widgetObj: object | null }) => (x.widgetObj as { source: string | null }).source;
   it("uses a checkbox widget in both states and marks done lines", () => {
     const d = decos(doc, doc.length);
     const boxes = d.filter((x) => x.widget === "CheckboxWidget");
@@ -189,17 +204,31 @@ describe("tasks", () => {
       [11, 17],
     ]);
     expect(boxes.every((b) => b.atomic && b.kind === "replace")).toBe(true);
-    expect(d.some((x) => lineClass(x, "cm-md-task") && x.from === 0)).toBe(true);
+    expect(d.some((x) => lineClass(x, "cm-md-task") && lineClass(x, "cm-md-li-task") && x.from === 0)).toBe(true);
     expect(d.some((x) => lineClass(x, "cm-md-task-done") && x.from === 11)).toBe(true);
     expect(d.some((x) => lineClass(x, "cm-md-task-done") && x.from === 0)).toBe(false);
-    expect(d.some((x) => x.widget === "GhostMarkWidget")).toBe(false);
+    expect(boxes.every((b) => source(b) === null)).toBe(true);
   });
-  it("adds a ghost mark in the margin only on the active line", () => {
+  it("shows the raw marker beside the checkbox only on the active line", () => {
     const d = decos(doc, 8);
-    const ghosts = d.filter((x) => x.widget === "GhostMarkWidget");
-    expect(ghosts.length).toBe(1);
-    expect(ghosts[0].from).toBe(0);
-    expect(d.filter((x) => x.widget === "CheckboxWidget").length).toBe(2);
+    const boxes = d.filter((x) => x.widget === "CheckboxWidget");
+    expect(boxes.map(source)).toEqual(["- [ ]", null]);
+  });
+});
+
+describe("blank lines", () => {
+  it("tags blank lines between blocks so they can be shorter", () => {
+    const doc = "# Title\n\nPara\n   \n- item";
+    const d = decos(doc, 0);
+    const blanks = d.filter((x) => lineClass(x, "cm-md-blank")).map((x) => x.from);
+    expect(blanks).toEqual([8, 14]);
+  });
+  it("keeps blank lines inside code blocks and front matter at full height", () => {
+    const doc = "---\na: 1\n\n---\n\n```\none\n\ntwo\n```\n";
+    const d = decos(doc, 0);
+    const blanks = d.filter((x) => lineClass(x, "cm-md-blank")).map((x) => doc.slice(0, x.from).split("\n").length);
+    // Line 3 is inside front matter and line 8 inside the fence; 5 and 11 are between blocks.
+    expect(blanks).toEqual([5, 11]);
   });
 });
 

@@ -28,6 +28,8 @@ export interface DecoInfo {
   attrs: Record<string, string>;
   atomic: boolean;
   text: string;
+  /** The widget instance itself, for widget-specific fields. */
+  widgetObj: object | null;
 }
 
 /** Flatten a DecorationSet into plain objects for assertions. */
@@ -56,6 +58,7 @@ export function collect(set: DecorationSet, doc: string): DecoInfo[] {
       attrs: v.spec.attributes ?? {},
       atomic: !!v.spec.atomic,
       text: doc.slice(cur.from, cur.to),
+      widgetObj: v.widget ?? null,
     });
     cur.next();
   }

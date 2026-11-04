@@ -399,3 +399,38 @@ describe("appearance settings", () => {
     expect(keys[0]).toBe("/n5.md");
   });
 });
+
+describe("responsive panels and full width", () => {
+  it("decides which panels fit beside a comfortable editor", () => {
+    expect(mod.panelFits(1280, true, 240)).toEqual({ sidebarFits: true, outlineFits: true });
+    expect(mod.panelFits(900, true, 240)).toEqual({ sidebarFits: true, outlineFits: false });
+    // With the sidebar closed there is room for the outline again.
+    expect(mod.panelFits(900, false, 240)).toEqual({ sidebarFits: true, outlineFits: true });
+    // Too small to dock the sidebar, and still too small for the outline.
+    expect(mod.panelFits(600, true, 240)).toEqual({ sidebarFits: false, outlineFits: false });
+  });
+
+  it("toggling a panel that doesn't fit opens it as an overlay and keeps the preference", async () => {
+    const store = await fresh();
+    const s = () => store.getState();
+    s().setFits(true, false);
+    expect(mod.outlineVisible(s())).toBe(false);
+    s().toggleOutline();
+    expect(s().outlinePeek).toBe(true);
+    expect(s().outlineOpen).toBe(true);
+    expect(mod.outlineVisible(s())).toBe(true);
+    s().closePeeks();
+    expect(mod.outlineVisible(s())).toBe(false);
+    // Becoming wide enough drops any overlay and docks per the preference.
+    s().toggleOutline();
+    s().setFits(true, true);
+    expect(s().outlinePeek).toBe(false);
+    expect(mod.outlineVisible(s())).toBe(true);
+  });
+
+  it("persists full width", async () => {
+    const store = await fresh();
+    store.getState().setFullWidth(true);
+    expect(JSON.parse(localStorage.getItem("margin.settings.v1")!).fullWidth).toBe(true);
+  });
+});

@@ -21,7 +21,10 @@ export function OutlinePanel() {
             <button
               key={`${h.pos}-${i}`}
               className={`outline-item level-${Math.min(h.level, 4)}${i === currentIndex ? " on" : ""}`}
-              onClick={() => editor && selectAt(editor, h.pos)}
+              onClick={() => {
+                useStore.getState().closePeeks();
+                if (editor) selectAt(editor, h.pos);
+              }}
               title={h.text}
             >
               {h.text}

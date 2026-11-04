@@ -105,7 +105,12 @@ function Row({ node, depth, onMenu, dropTarget, onDragStart }: RowProps) {
       <Tag
         className={`tree-row${selected ? " selected" : ""}${dropTarget === node.path ? " drop-target" : ""}`}
         style={{ paddingLeft: 8 + depth * 14 }}
-        onClick={() => (isRenaming ? undefined : isDir ? toggleDir(node.path) : void openNote(node.path))}
+        onClick={() => {
+          if (isRenaming) return;
+          if (isDir) return toggleDir(node.path);
+          useStore.getState().closePeeks();
+          void openNote(node.path);
+        }}
         onContextMenu={(e: MouseEvent) => onMenu(e, node)}
         onDoubleClick={(e: MouseEvent) => {
           e.preventDefault();

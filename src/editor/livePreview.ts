@@ -21,7 +21,6 @@ import type { SyntaxNode, SyntaxNodeRef, Tree } from "@lezer/common";
 import {
   BulletWidget,
   CheckboxWidget,
-  GhostMarkWidget,
   HrWidget,
   ImageWidget,
   LangLabelWidget,
@@ -195,7 +194,11 @@ export function buildDecorations(state: EditorState, focused = state.field(focus
     }
   }
 
+  /** Blocks whose blank lines keep full height (code, tables, raw HTML, front matter). */
+  const keepBlankLines: { from: number; to: number }[] = [];
+
   const fm = frontMatterRange(doc);
+  if (fm) keepBlankLines.push(fm);
   if (fm) {
     for (const from of lineRange(fm.from, fm.to)) out.push(lineDeco("cm-md-frontmatter").range(from));
     skipUntil = fm.to;
@@ -204,6 +207,25 @@ export function buildDecorations(state: EditorState, focused = state.field(focus
   const hideOrDim = (from: number, to: number, active: boolean, activeDeco: Decoration = dim) => {
     if (to <= from) return;
     out.push((active ? activeDeco : hide).range(from, to));
+  };
+
+  /** Hide leading spaces or tabs between `from` and `to` (list indentation). */
+  const hideIndent = (from: number, to: number) => {
+    if (to > from && /^[ \t]+$/.test(doc.sliceString(from, to))) out.push(hide.range(from, to));
+  };
+
+  const innermostListItem = (pos: number): SyntaxNode | null => {
+    for (let node: SyntaxNode | null = tree.resolveInner(pos, 1); node; node = node.parent) {
+      if (node.name === "ListItem") return node;
+    }
+    return null;
+  };
+
+  const insideCode = (pos: number): boolean => {
+    for (let node: SyntaxNode | null = tree.resolveInner(pos, 1); node; node = node.parent) {
+      if (node.name === "FencedCode" || node.name === "CodeBlock" || node.name === "Table" || node.name === "HTMLBlock") return true;
+    }
+    return false;
   };
 
   tree.iterate({
@@ -337,6 +359,7 @@ export function buildDecorations(state: EditorState, focused = state.field(focus
         }
 
         case "FencedCode": {
+          keepBlankLines.push({ from: n.from, to: n.to });
           const node = n.node;
           const active = touches(n.from, n.to);
           const firstLine = doc.lineAt(n.from);
@@ -363,6 +386,7 @@ export function buildDecorations(state: EditorState, focused = state.field(focus
           return;
         }
         case "CodeBlock": {
+          keepBlankLines.push({ from: n.from, to: n.to });
           for (const from of lineRange(n.from, n.to)) out.push(lineDeco("cm-md-fence cm-md-indented-code").range(from));
           return;
         }
@@ -379,16 +403,36 @@ export function buildDecorations(state: EditorState, focused = state.field(focus
         }
 
         case "ListItem": {
+          // Lists get real nesting and hanging indents: the line is padded by
+          // depth + marker width and the first line is pulled back by the marker
+          // width (CSS in editor.css), so wrapped lines align with the text.
           const node = n.node;
           const depth = listDepth(node);
           const task = node.getChild("Task");
-          let cls = `cm-md-li cm-md-li-${Math.min(depth, 5)}`;
+          const kind = task ? "task" : node.parent?.name === "OrderedList" ? "ol" : "ul";
+          let cls = `cm-md-li cm-md-li-${Math.min(depth, 5)} cm-md-li-${kind}`;
           if (task) {
             const marker = task.getChild("TaskMarker");
             const checked = marker ? /x/i.test(doc.sliceString(marker.from, marker.to)) : false;
             cls += checked ? " cm-md-task cm-md-task-done" : " cm-md-task";
           }
-          out.push(lineDeco(cls).range(doc.lineAt(n.from).from));
+          const first = doc.lineAt(n.from);
+          const style = `--li-depth: ${depth}`;
+          out.push(Decoration.line({ class: cls, attributes: { style } }).range(first.from));
+          // Indentation is drawn by the padding, so hide the raw spaces. They stay
+          // hidden on the active line too, so nothing moves when the caret arrives.
+          hideIndent(first.from, n.from);
+          // Continuation lines of this item (not nested items or code) share the indent.
+          const last = doc.lineAt(n.to);
+          for (let l = first.number + 1; l <= last.number; l++) {
+            const line = doc.line(l);
+            const textStart = line.from + (/^[ \t]*/.exec(line.text)?.[0].length ?? 0);
+            if (textStart === line.to) continue;
+            if (innermostListItem(textStart)?.from !== node.from) continue;
+            if (insideCode(textStart)) continue;
+            out.push(Decoration.line({ class: `cm-md-li-cont cm-md-li-${kind}`, attributes: { style } }).range(line.from));
+            hideIndent(line.from, textStart);
+          }
           return;
         }
         case "ListMark": {
@@ -402,17 +446,19 @@ export function buildDecorations(state: EditorState, focused = state.field(focus
             const checked = /x/i.test(doc.sliceString(marker.from, marker.to));
             let to = marker.to;
             if (doc.sliceString(to, to + 1) === " ") to++;
-            out.push(Decoration.replace({ widget: new CheckboxWidget(checked), atomic: true }).range(n.from, to));
-            if (active) {
-              out.push(Decoration.widget({ widget: new GhostMarkWidget(doc.sliceString(n.from, marker.to)), side: -1 }).range(n.from));
-            }
+            // On the caret's line the raw "- [ ]" shows beside the checkbox.
+            const source = active ? doc.sliceString(n.from, marker.to) : null;
+            out.push(Decoration.replace({ widget: new CheckboxWidget(checked, source), atomic: true }).range(n.from, to));
             return;
           }
+          // The marker box includes the space after it, so the text starts at the
+          // same place whether the raw marker or the rendered bullet is showing.
+          const to = doc.sliceString(n.to, n.to + 1) === " " ? n.to + 1 : n.to;
           if (list.name === "BulletList") {
-            if (active) out.push(markDeco("cm-md-listmark").range(n.from, n.to));
-            else out.push(Decoration.replace({ widget: new BulletWidget(listDepth(item)) }).range(n.from, n.to));
+            if (active) out.push(markDeco("cm-md-listmark").range(n.from, to));
+            else out.push(Decoration.replace({ widget: new BulletWidget(listDepth(item)) }).range(n.from, to));
           } else {
-            out.push(markDeco("cm-md-olmark").range(n.from, n.to));
+            out.push(markDeco("cm-md-olmark").range(n.from, to));
           }
           return;
         }
@@ -453,13 +499,27 @@ export function buildDecorations(state: EditorState, focused = state.field(focus
         }
 
         case "HTMLBlock":
-        case "HTMLTag":
         case "CommentBlock":
+          keepBlankLines.push({ from: n.from, to: n.to });
+          out.push(markDeco("cm-md-html").range(n.from, n.to));
+          return;
+        case "HTMLTag":
           out.push(markDeco("cm-md-html").range(n.from, n.to));
           return;
       }
     },
   });
+
+  // Blank lines between blocks are shorter than text lines, so paragraphs and
+  // headings are spaced like a page rather than by a full empty line.
+  let keep = 0;
+  for (let l = 1; l <= doc.lines; l++) {
+    const line = doc.line(l);
+    if (line.length > 0 && line.text.trim() !== "") continue;
+    while (keep < keepBlankLines.length && keepBlankLines[keep].to < line.from) keep++;
+    if (keepBlankLines.some((r, i) => i >= keep && r.from <= line.from && r.to >= line.to)) continue;
+    out.push(lineDeco("cm-md-blank").range(line.from));
+  }
 
   // Mark the caret's lines so focus mode can dim everything else.
   for (const l of activeLines) out.push(lineDeco("cm-md-active").range(doc.line(l).from));
