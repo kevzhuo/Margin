@@ -10,3 +10,12 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
     <App />
   </React.StrictMode>,
 );
+
+// Test and debugging hook (used by the Playwright suite).
+import { useStore } from "./state/store";
+declare global {
+  interface Window {
+    __margin?: { store: typeof useStore };
+  }
+}
+window.__margin = { store: useStore };

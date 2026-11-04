@@ -184,11 +184,12 @@ export const useStore = create<AppState>((set, get) => {
         }
       }
       const { tree, activePath } = get();
-      if (!activePath && settings.lastNote && flattenFiles(tree).some((f) => f.path === settings.lastNote)) {
-        await get().openNote(settings.lastNote);
-      } else if (!activePath && tree.length) {
-        const first = flattenFiles(tree)[0];
-        if (first) await get().openNote(first.path);
+      const files = flattenFiles(tree);
+      const preferred = settings.lastNote ?? (backend.kind === "memory" ? files.find((f) => /Editor design notes/.test(f.name))?.path : null);
+      if (!activePath && preferred && files.some((f) => f.path === preferred)) {
+        await get().openNote(preferred);
+      } else if (!activePath && files.length) {
+        await get().openNote(files[0].path);
       }
       set({ ready: true });
     },

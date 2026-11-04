@@ -1,45 +1,46 @@
 /* CodeMirror surface, styled as a Typora-like page. Every markdown class
    below is produced by src/editor/livePreview.ts. */
 
-.cm-editor {
+.editor-host .cm-editor {
   height: 100%;
   background: var(--bg);
   color: var(--text);
   font-family: var(--font-editor);
   font-size: 16px;
 }
-.cm-editor.cm-focused {
+.editor-host .cm-editor.cm-focused {
   outline: none;
 }
-.cm-scroller {
+.editor-host .cm-editor .cm-scroller {
   overflow: auto;
   line-height: 1.6;
-  font-family: inherit;
+  font-family: var(--font-editor);
 }
-.cm-content {
+.editor-host .cm-editor .cm-content {
+  font-family: var(--font-editor);
   max-width: calc(var(--editor-measure) + 96px);
   width: 100%;
   margin: 0 auto;
   padding: 24px 48px 45vh;
   caret-color: var(--text);
 }
-.cm-line {
+.editor-host .cm-editor .cm-line {
   position: relative;
   padding: 2px 0;
 }
-.cm-cursor,
-.cm-dropCursor {
+.editor-host .cm-editor .cm-cursor,
+.editor-host .cm-editor .cm-dropCursor {
   border-left: 2px solid var(--text);
   margin-left: -1px;
 }
-.cm-selectionBackground,
-.cm-editor ::selection {
+.editor-host .cm-editor .cm-selectionBackground,
+.editor-host .cm-editor ::selection {
   background: var(--selection) !important;
 }
-.cm-focused .cm-selectionBackground {
+.editor-host .cm-editor.cm-focused .cm-selectionBackground {
   background: var(--selection) !important;
 }
-.cm-placeholder {
+.editor-host .cm-editor .cm-placeholder {
   color: var(--text-3);
 }
 
@@ -69,28 +70,28 @@
   font-weight: 700;
   letter-spacing: -0.012em;
 }
-.cm-md-h1 {
+.editor-host .cm-editor .cm-line.cm-md-h1 {
   font-size: 1.875em;
   line-height: 1.25;
   padding-top: 18px;
   padding-bottom: 6px;
 }
-.cm-md-h2 {
+.editor-host .cm-editor .cm-line.cm-md-h2 {
   font-size: 1.375em;
   line-height: 1.3;
   font-weight: 600;
   padding-top: 18px;
   padding-bottom: 2px;
 }
-.cm-md-h3 {
+.editor-host .cm-editor .cm-line.cm-md-h3 {
   font-size: 1.125em;
   line-height: 1.35;
   font-weight: 600;
   padding-top: 12px;
 }
-.cm-md-h4,
-.cm-md-h5,
-.cm-md-h6 {
+.editor-host .cm-editor .cm-line.cm-md-h4,
+.editor-host .cm-editor .cm-line.cm-md-h5,
+.editor-host .cm-editor .cm-line.cm-md-h6 {
   font-size: 1em;
   font-weight: 600;
   padding-top: 8px;
@@ -263,9 +264,9 @@
 }
 
 /* ---------- Blockquote ---------- */
-.cm-md-quote {
+.editor-host .cm-editor .cm-line.cm-md-quote {
   border-left: 3px solid var(--quote-border);
-  padding-left: 16px !important;
+  padding-left: 16px;
   margin-left: 0;
 }
 .cm-md-quote .cm-md-margin-mark {
@@ -273,29 +274,29 @@
 }
 
 /* ---------- Code fences ---------- */
-.cm-md-fence {
+.editor-host .cm-editor .cm-line.cm-md-fence {
   background: var(--fence-bg);
   font-family: var(--font-mono);
   font-size: 13px;
   line-height: 1.55;
-  padding-left: 14px !important;
-  padding-right: 14px !important;
+  padding-left: 14px;
+  padding-right: 14px;
   border-left: 1px solid var(--border);
   border-right: 1px solid var(--border);
 }
-.cm-md-fence-head {
+.editor-host .cm-editor .cm-line.cm-md-fence-head {
   border-top: 1px solid var(--border);
   border-top-left-radius: var(--radius-md);
   border-top-right-radius: var(--radius-md);
-  padding-top: 6px !important;
+  padding-top: 6px;
   margin-top: 6px;
   color: var(--text-3);
 }
-.cm-md-fence-foot {
+.editor-host .cm-editor .cm-line.cm-md-fence-foot {
   border-bottom: 1px solid var(--border);
   border-bottom-left-radius: var(--radius-md);
   border-bottom-right-radius: var(--radius-md);
-  padding-bottom: 6px !important;
+  padding-bottom: 6px;
   margin-bottom: 6px;
 }
 .cm-md-fence-active {
@@ -356,23 +357,23 @@
   background: var(--border);
   vertical-align: middle;
 }
-.cm-md-hr-line {
+.editor-host .cm-editor .cm-line.cm-md-hr-line {
   padding-top: 10px;
   padding-bottom: 10px;
 }
 
 /* ---------- Front matter ---------- */
-.cm-md-frontmatter {
+.editor-host .cm-editor .cm-line.cm-md-frontmatter {
   font-family: var(--font-mono);
   font-size: 13px;
   color: var(--text-3);
   background: var(--fence-bg);
-  padding-left: 14px !important;
-  padding-right: 14px !important;
+  padding-left: 14px;
+  padding-right: 14px;
 }
 
 /* ---------- Slash menu ---------- */
-.cm-tooltip.cm-slash-menu {
+.cm-tooltip.cm-tooltip-autocomplete.cm-slash-menu {
   background: var(--bg-elevated);
   border: 0;
   border-radius: 8px;
@@ -430,15 +431,15 @@
 }
 
 /* ---------- Search panel ---------- */
-.cm-panels {
+.editor-host .cm-editor .cm-panels {
   background: var(--bg-sidebar);
   color: var(--text);
   border-bottom: 1px solid var(--border);
   font-family: var(--font-ui);
   font-size: 13px;
 }
-.cm-panel.cm-search input,
-.cm-panel.cm-search button {
+.editor-host .cm-editor .cm-panel.cm-search input,
+.editor-host .cm-editor .cm-panel.cm-search button {
   font: inherit;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
