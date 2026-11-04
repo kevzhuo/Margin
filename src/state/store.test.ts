@@ -233,3 +233,169 @@ describe("ui state", () => {
     expect(mod.crumbsFor(null, DESIGN)).toEqual([]);
   });
 });
+
+describe("navigation history", () => {
+  const INBOX = `${R}/Inbox.md`;
+
+  it("goes back and forward, and a new note drops the forward stack", async () => {
+    const store = await fresh();
+    const s = () => store.getState();
+    await s().openNote(ROADMAP);
+    await s().openNote(INBOX);
+    expect(s().history).toEqual([DESIGN, ROADMAP, INBOX]);
+    expect(mod.canGoBack(s())).toBe(true);
+    expect(mod.canGoForward(s())).toBe(false);
+
+    await s().goBack();
+    expect(s().activePath).toBe(ROADMAP);
+    await s().goBack();
+    expect(s().activePath).toBe(DESIGN);
+    expect(mod.canGoBack(s())).toBe(false);
+    await s().goForward();
+    expect(s().activePath).toBe(ROADMAP);
+
+    const journal = `${R}/Journal/2026-11-04.md`;
+    await s().openNote(journal);
+    expect(s().history).toEqual([DESIGN, ROADMAP, journal]);
+    expect(mod.canGoForward(s())).toBe(false);
+  });
+
+  it("skips notes that were deleted", async () => {
+    const store = await fresh();
+    const s = () => store.getState();
+    await s().openNote(ROADMAP);
+    await s().openNote(INBOX);
+    await s().deletePath(ROADMAP);
+    expect(s().history).toEqual([DESIGN, INBOX]);
+    await s().goBack();
+    expect(s().activePath).toBe(DESIGN);
+  });
+
+  it("keeps a most-recently-used list", async () => {
+    const store = await fresh();
+    const s = () => store.getState();
+    await s().openNote(ROADMAP);
+    await s().openNote(INBOX);
+    await s().openNote(ROADMAP);
+    expect(s().recent.slice(0, 3)).toEqual([ROADMAP, INBOX, DESIGN]);
+  });
+});
+
+describe("jumps", () => {
+  it("records where to put the caret, and bumps a version for the open note", async () => {
+    const store = await fresh();
+    const s = () => store.getState();
+    await s().openNote(ROADMAP, { jump: { line: 3, query: "Live" } });
+    expect(s().jump).toEqual({ path: ROADMAP, line: 3, query: "Live" });
+    const v = s().jumpVersion;
+    await s().openNote(ROADMAP, { jump: { heading: "next" } });
+    expect(s().jumpVersion).toBe(v + 1);
+    expect(s().jump).toEqual({ path: ROADMAP, heading: "next" });
+  });
+});
+
+describe("folders, moves and deletes", () => {
+  it("creates a folder and starts renaming it", async () => {
+    const store = await fresh();
+    const path = await store.getState().createFolder();
+    expect(path).toBe(`${R}/New folder`);
+    expect(store.getState().renaming).toBe(path);
+    expect(store.getState().tree.some((n) => n.path === path && n.kind === "dir")).toBe(true);
+  });
+
+  it("moving the open note updates every remembered path", async () => {
+    const store = await fresh();
+    const s = () => store.getState();
+    s().saveViewState(DESIGN, { anchor: 5, head: 5, scrollTop: 120 });
+    const folder = (await s().createFolder())!;
+    await s().movePath(DESIGN, folder);
+    const moved = `${folder}/Editor design notes.md`;
+    expect(s().activePath).toBe(moved);
+    expect(s().history).toEqual([moved]);
+    expect(s().recent[0]).toBe(moved);
+    expect(s().viewStates[moved]).toEqual({ anchor: 5, head: 5, scrollTop: 120 });
+    expect(s().viewStates[DESIGN]).toBeUndefined();
+    expect(s().expandedDirs[folder]).toBe(true);
+    expect(await backend.readNote(moved)).toContain("# Editor design notes");
+  });
+
+  it("refuses to move a folder into itself", async () => {
+    const store = await fresh();
+    const s = () => store.getState();
+    await s().movePath(`${R}/Projects`, `${R}/Projects`);
+    await s().movePath(`${R}/Journal`, `${R}/Journal`);
+    const inner = (await s().createFolder(`${R}/Projects`))!;
+    await s().movePath(`${R}/Projects`, inner);
+    expect(s().toasts.at(-1)?.message).toMatch(/into itself/);
+    expect(s().tree.some((n) => n.path === `${R}/Projects`)).toBe(true);
+  });
+
+  it("deleting the open note lands on the most recent remaining note", async () => {
+    const store = await fresh();
+    const s = () => store.getState();
+    await s().openNote(ROADMAP);
+    await s().deletePath(ROADMAP);
+    expect(s().activePath).toBe(DESIGN);
+    expect(s().toasts.at(-1)?.message).toBe("Deleted “Roadmap”");
+  });
+
+  it("creates a note with a given name without entering rename mode", async () => {
+    const store = await fresh();
+    const path = await store.getState().createNote(undefined, "Meeting notes");
+    expect(path).toBe(`${R}/Meeting notes.md`);
+    expect(store.getState().activePath).toBe(path);
+    expect(store.getState().renaming).toBeNull();
+  });
+});
+
+describe("toasts and confirmation", () => {
+  it("toasts dismiss themselves and play an exit before disappearing", async () => {
+    const store = await fresh();
+    const s = () => store.getState();
+    s().pushToast("Hello");
+    expect(s().toasts.map((t) => t.message)).toEqual(["Hello"]);
+    vi.advanceTimersByTime(mod.TOAST_MS.info);
+    expect(s().toasts[0].leaving).toBe(true);
+    vi.advanceTimersByTime(mod.TOAST_EXIT_MS);
+    expect(s().toasts).toEqual([]);
+  });
+
+  it("askConfirm resolves with the user's answer", async () => {
+    const store = await fresh();
+    const s = () => store.getState();
+    const yes = s().askConfirm({ title: "Sure?" });
+    expect(s().confirmRequest?.title).toBe("Sure?");
+    s().resolveConfirm(true);
+    await expect(yes).resolves.toBe(true);
+    expect(s().confirmRequest).toBeNull();
+    const no = s().askConfirm({ title: "Again?" });
+    s().resolveConfirm(false);
+    await expect(no).resolves.toBe(false);
+  });
+});
+
+describe("appearance settings", () => {
+  it("clamps text size and sidebar width, and persists them", async () => {
+    const store = await fresh();
+    const s = () => store.getState();
+    s().setFontSize(40);
+    expect(s().fontSize).toBe(mod.FONT_SIZE_MAX);
+    s().bumpFontSize(-100);
+    expect(s().fontSize).toBe(mod.FONT_SIZE_MIN);
+    s().setSidebarWidth(10);
+    expect(s().sidebarWidth).toBe(mod.SIDEBAR_WIDTH_MIN);
+    s().setLineWidth("wide");
+    s().setFontFamily("serif");
+    s().setFocusMode(true);
+    const saved = JSON.parse(localStorage.getItem("margin.settings.v1")!);
+    expect(saved).toMatchObject({ fontSize: mod.FONT_SIZE_MIN, sidebarWidth: mod.SIDEBAR_WIDTH_MIN, lineWidth: "wide", fontFamily: "serif", focusMode: true });
+  });
+
+  it("remembers at most 100 view states, dropping the oldest", async () => {
+    const store = await fresh();
+    for (let i = 0; i < 105; i++) store.getState().saveViewState(`/n${i}.md`, { anchor: i, head: i, scrollTop: 0 });
+    const keys = Object.keys(store.getState().viewStates);
+    expect(keys).toHaveLength(100);
+    expect(keys[0]).toBe("/n5.md");
+  });
+});

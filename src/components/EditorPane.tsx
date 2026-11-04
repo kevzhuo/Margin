@@ -193,6 +193,12 @@ export function EditorPane() {
     viewRef.current?.requestMeasure();
   }, [fontSize, fontFamily, lineWidth, typewriterOn]);
 
+  // Turning typewriter mode on centers the caret right away.
+  useEffect(() => {
+    const view = viewRef.current;
+    if (typewriterOn && view) scrollToPos(view, view.state.selection.main.head, { align: "center", smooth: true });
+  }, [typewriterOn]);
+
   return (
     <div className="editor-pane">
       {externalChange && (

@@ -114,3 +114,62 @@ describe("misc", () => {
     expect(await backend.pickVault()).toBe(R);
   });
 });
+
+describe("folders and search", () => {
+  const R = "/Demo Vault";
+
+  it("creates folders, de-duplicates names and lists empty ones", async () => {
+    const b = new MemoryBackend({ [`${R}/a.md`]: "x" });
+    const one = await b.createFolder(R, "Ideas");
+    const two = await b.createFolder(R, "Ideas");
+    expect(one).toBe(`${R}/Ideas`);
+    expect(two).toBe(`${R}/Ideas 2`);
+    const tree = await b.listTree(R);
+    expect(tree.map((n) => [n.name, n.kind])).toEqual([
+      ["Ideas", "dir"],
+      ["Ideas 2", "dir"],
+      ["a.md", "file"],
+    ]);
+    expect(tree[0].children).toEqual([]);
+  });
+
+  it("moves notes into folders and renames folders with their empty subfolders", async () => {
+    const b = new MemoryBackend({ [`${R}/a.md`]: "x" });
+    await b.createFolder(R, "Outer");
+    await b.createFolder(`${R}/Outer`, "Inner");
+    await b.renamePath(`${R}/a.md`, `${R}/Outer/a.md`);
+    await b.renamePath(`${R}/Outer`, `${R}/Renamed`);
+    const tree = await b.listTree(R);
+    expect(tree[0].name).toBe("Renamed");
+    expect(tree[0].children!.map((c) => c.path)).toEqual([`${R}/Renamed/Inner`, `${R}/Renamed/a.md`]);
+    await expect(b.renamePath(`${R}/Renamed`, `${R}/Renamed/Inner/Renamed`)).rejects.toThrow(/into itself/);
+  });
+
+  it("deleting a folder removes its empty subfolders too", async () => {
+    const b = new MemoryBackend({});
+    await b.createFolder(R, "A");
+    await b.createFolder(`${R}/A`, "B");
+    await b.deletePath(`${R}/A`);
+    expect(await b.listTree(R)).toEqual([]);
+  });
+
+  it("searches case-insensitively in natural path order with a per-note cap", async () => {
+    const b = new MemoryBackend({
+      [`${R}/b.md`]: "Typora\nno\nTYPORA again",
+      [`${R}/a.md`]: Array.from({ length: 8 }, (_, i) => `typora ${i}`).join("\n"),
+      [`${R}/c.txt`]: "typora",
+    });
+    const hits = await b.searchVault(R, "typora");
+    expect(hits.map((h) => [h.path.split("/").pop(), h.line])).toEqual([
+      ["a.md", 1],
+      ["a.md", 2],
+      ["a.md", 3],
+      ["a.md", 4],
+      ["a.md", 5],
+      ["b.md", 1],
+      ["b.md", 3],
+    ]);
+    expect(await b.searchVault(R, "typora", 2)).toHaveLength(2);
+    expect(await b.searchVault(R, "  ")).toEqual([]);
+  });
+});

@@ -583,9 +583,6 @@ html.focus-mode .editor-host .cm-editor.cm-focused .cm-line.cm-md-table-raw {
   font-style: italic;
   font-family: Georgia, serif;
 }
-.cm-tooltip.cm-bubble-toolbar.no-enter {
-  animation: none;
-}
 .cm-bubble-button {
   transition:
     background-color var(--dur-fast) var(--ease-out),

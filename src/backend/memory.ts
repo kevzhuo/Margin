@@ -123,6 +123,7 @@ const INBOX = `# Inbox
 
 Loose thoughts go here before they get a home.
 
+- Next up: [the roadmap](Projects/Roadmap.md#next)
 - Try ~~Inter~~ SF Pro for body text on macOS
 - Escaped characters: \\*not emphasis\\*
 - Image syntax renders inline: ![Margin logo](https://raw.githubusercontent.com/github/explore/main/topics/markdown/markdown.png)

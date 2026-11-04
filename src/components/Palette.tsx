@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { findMatch, flattenFiles, stripExtension, type SearchHit } from "../backend";
 import { useStore } from "../state/store";
 import { formatShortcut, paletteCommands, type AppCommand } from "../state/appCommands";
@@ -70,17 +70,19 @@ export function Palette() {
   const listRef = useRef<HTMLDivElement>(null);
   const searchSeq = useRef(0);
 
-  useEffect(() => {
+  // Seed and focus synchronously, in the same commit that shows the palette, so
+  // keys typed right after the shortcut land in the input rather than the note.
+  useLayoutEffect(() => {
     if (!open) return;
     setQuery(seed);
     setIndex(0);
     setHits({ query: "", hits: [] });
-    requestAnimationFrame(() => {
-      const input = inputRef.current;
-      if (!input) return;
+    const input = inputRef.current;
+    if (input) {
+      input.value = seed;
       input.focus();
-      input.setSelectionRange(input.value.length, input.value.length);
-    });
+      input.setSelectionRange(seed.length, seed.length);
+    }
     // Re-seed every time the palette is (re)opened.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, version]);
@@ -168,7 +170,11 @@ export function Palette() {
 
   const dismiss = (refocusEditor = true) => {
     close();
-    if (refocusEditor) requestAnimationFrame(() => useStore.getState().editor?.focus());
+    // Skip the refocus if the palette was reopened in the meantime.
+    if (refocusEditor)
+      requestAnimationFrame(() => {
+        if (!useStore.getState().paletteOpen) useStore.getState().editor?.focus();
+      });
   };
 
   const choose = (i: number) => {

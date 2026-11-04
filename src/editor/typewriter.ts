@@ -13,7 +13,10 @@ export function typewriter(isOn: () => boolean): Extension {
         if (!isOn() || !u.view.hasFocus) return;
         if (!u.docChanged && !u.selectionSet) return;
         if (u.transactions.some((tr) => tr.isUserEvent("select.pointer"))) return;
-        scrollToPos(u.view, u.state.selection.main.head, { align: "center", smooth: true });
+        // After an edit CodeMirror pins the scroll position to keep content steady,
+        // which would cancel a smooth scroll mid-flight. Edits scroll instantly;
+        // plain caret movement glides.
+        scrollToPos(u.view, u.state.selection.main.head, { align: "center", smooth: !u.docChanged });
       }
     },
   );

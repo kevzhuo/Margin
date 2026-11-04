@@ -18,9 +18,32 @@ database, and nothing moves on screen when you click into a line.
 | Area | What works |
 | --- | --- |
 | Live preview | Headings, bold, italic, strikethrough, inline code, links, bare URLs, images, bullet and numbered lists, task lists with real checkboxes, blockquotes, fenced code with syntax highlighting and a language label, tables (rendered when the caret is outside, raw when inside), horizontal rules, escapes, YAML front matter |
-| Writing | Slash menu on an empty line, `Mod+B` / `Mod+I` / `Mod+E` / `Mod+K` / `Mod+Shift+X`, `Mod+1`..`Mod+6` for headings, `Mod+Enter` toggles a task, Enter continues lists, Backspace unwinds list markup, find and replace |
-| Vault | Open any folder, file tree with create, rename, and delete (to trash), quick switcher (`Mod+P`), outline panel, autosave with atomic writes, reload when a file changes on disk |
-| Appearance | Light and dark palettes, follows the system by default, SF Pro on macOS, Inter or Segoe UI elsewhere |
+| Writing | Slash menu on an empty line, a formatting toolbar over selected text, typing `*`, `_`, `` ` ``, `~` or `"` over a selection wraps it, brackets close themselves, pasting a URL over text makes a link, Enter continues lists, find and replace |
+| Focus | Focus mode dims everything but the line you are on; typewriter mode keeps the caret near the middle of the window |
+| Navigation | Command palette, quick switcher with recent notes and full-text search that jumps to the match, back and forward history, caret and scroll position remembered per note, relative links like `[x](Other.md#heading)` open in the app |
+| Vault | Open any folder, file tree with notes and folders, drag and drop to move, rename inline, delete to the trash with a confirmation, copy path, show in Finder, resizable sidebar, autosave with atomic writes, reload when a file changes on disk |
+| Appearance | Light and dark palettes that follow the system, sans, serif or mono text, adjustable text size and line width, smooth transitions throughout that switch off when the system asks for reduced motion |
+
+## Keyboard shortcuts
+
+`Mod` is Cmd on macOS and Ctrl elsewhere.
+
+| Shortcut | Action |
+| --- | --- |
+| `Mod+P` or `Mod+O` | Go to a note, or search all notes |
+| `Mod+Shift+P` | Run a command (or type `>` in the switcher) |
+| `Mod+Shift+F` | Search all notes |
+| `Mod+F` | Find and replace in the note |
+| `Mod+N` / `Mod+Shift+N` | New note / new folder |
+| `Mod+[` / `Mod+]` | Back / forward |
+| `F2` | Rename the open note |
+| `Mod+B` `Mod+I` `Mod+E` `Mod+K` `Mod+Shift+X` | Bold, italic, inline code, link, strikethrough |
+| `Mod+1` … `Mod+6`, `Mod+0` | Heading level, or plain paragraph |
+| `Mod+Enter` | Toggle a task |
+| `Mod+=` / `Mod+-` | Larger / smaller text |
+| `Mod+\` / `Mod+Shift+\` | Toggle the sidebar / outline |
+| `F8` / `F9` | Focus mode / typewriter mode |
+| `Mod+,` | Settings |
 
 ## Development
 
@@ -78,10 +101,12 @@ cd src-tauri && cargo test
 ```
 src/
   backend/        VaultBackend interface, Tauri adapter, in-memory demo vault
-  editor/         CodeMirror extensions: live preview, widgets, commands, slash menu
-  components/     React UI: sidebar, file tree, top bar, editor pane, outline, quick switcher
-  state/          zustand store: vault, autosave, settings
-  styles/         design tokens and stylesheets
+  editor/         CodeMirror extensions: live preview, widgets, commands, slash menu,
+                  bubble toolbar, typewriter scrolling, selection wrapping
+  components/     React UI: sidebar, file tree, top bar, editor pane, outline,
+                  palette, settings, dialogs, toasts
+  state/          zustand store (vault, history, autosave, settings) and the command registry
+  styles/         design tokens, motion keyframes, and stylesheets
 src-tauri/        Rust shell: window config, vault commands, file watcher
 e2e/              Playwright tests
 docs/research.md  the research and design notes this project was built from
@@ -103,6 +128,18 @@ selection, or focus changes.
 - Checkboxes, images, horizontal rules, code-fence language labels, and tables
   are widgets. Tables are block widgets that drop back to raw pipe syntax when
   the caret enters them.
+
+## Motion
+
+Every transition uses the timing tokens in `src/styles/tokens.css` and the
+keyframes in `src/styles/motion.css`. When the operating system asks for reduced
+motion, the durations collapse to zero and panels, menus, and dialogs change
+instantly.
+
+Two rules keep motion from fighting the editor. Note switches fade without
+moving, because CodeMirror measures positions from the live DOM. And widgets
+that change state, such as checkboxes and the selection toolbar, keep their DOM
+node so they animate instead of being rebuilt.
 
 ## Status
 

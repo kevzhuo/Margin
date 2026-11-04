@@ -229,6 +229,7 @@ let saveTimer: ReturnType<typeof setTimeout> | null = null;
 let unwatch: (() => void) | null = null;
 let treeRefreshTimer: ReturnType<typeof setTimeout> | null = null;
 let toastSeq = 0;
+let initPromise: Promise<void> | null = null;
 let confirmResolver: ((ok: boolean) => void) | null = null;
 
 export const SAVE_DELAY_MS = 500;
@@ -411,33 +412,37 @@ export const useStore = create<AppState>((set, get) => {
     jump: null,
     jumpVersion: 0,
 
-    async init() {
-      const backend = await getBackend();
-      set({ backend });
-      if (backend.kind === "memory") {
-        await get().openVault((await backend.pickVault()) ?? undefined);
-      } else if (settings.vaultRoot) {
-        try {
-          await get().openVault(settings.vaultRoot);
-        } catch (e) {
-          fail("Could not open the last vault", e);
+    init() {
+      // React StrictMode runs effects twice in development; start up only once.
+      initPromise ??= (async () => {
+        const backend = await getBackend();
+        set({ backend });
+        if (backend.kind === "memory") {
+          await get().openVault((await backend.pickVault()) ?? undefined);
+        } else if (settings.vaultRoot) {
+          try {
+            await get().openVault(settings.vaultRoot);
+          } catch (e) {
+            fail("Could not open the last vault", e);
+          }
         }
-      }
-      const { tree, activePath } = get();
-      const files = flattenFiles(tree);
-      // Drop remembered paths that no longer exist.
-      const exists = new Set(files.map((f) => f.path));
-      set((s) => ({
-        recent: s.recent.filter((p) => exists.has(p)),
-        viewStates: Object.fromEntries(Object.entries(s.viewStates).filter(([p]) => exists.has(p))),
-      }));
-      const preferred = settings.lastNote ?? (backend.kind === "memory" ? files.find((f) => /Editor design notes/.test(f.name))?.path : null);
-      if (!activePath && preferred && exists.has(preferred)) {
-        await get().openNote(preferred);
-      } else if (!activePath && files.length) {
-        await get().openNote(files[0].path);
-      }
-      set({ ready: true });
+        const { tree, activePath } = get();
+        const files = flattenFiles(tree);
+        // Drop remembered paths that no longer exist.
+        const exists = new Set(files.map((f) => f.path));
+        set((s) => ({
+          recent: s.recent.filter((p) => exists.has(p)),
+          viewStates: Object.fromEntries(Object.entries(s.viewStates).filter(([p]) => exists.has(p))),
+        }));
+        const preferred = settings.lastNote ?? (backend.kind === "memory" ? files.find((f) => /Editor design notes/.test(f.name))?.path : null);
+        if (!activePath && preferred && exists.has(preferred)) {
+          await get().openNote(preferred);
+        } else if (!activePath && files.length) {
+          await get().openNote(files[0].path);
+        }
+        set({ ready: true });
+      })();
+      return initPromise;
     },
 
     async openVault(root) {
@@ -509,6 +514,7 @@ export const useStore = create<AppState>((set, get) => {
       }
       if (opts.history !== false) {
         set((s) => {
+          if (s.history[s.historyIndex] === path) return {};
           const history = [...s.history.slice(0, s.historyIndex + 1), path].slice(-HISTORY_MAX);
           return { history, historyIndex: history.length - 1 };
         });

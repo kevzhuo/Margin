@@ -7,10 +7,6 @@ import { headingLevelAt, insertLink, setHeading, toggleInline } from "./commands
 
 const setDragging = StateEffect.define<boolean>();
 
-/** When the previous toolbar went away; a new one within this window is a rebuild. */
-let lastHidden = 0;
-const REBUILD_WINDOW_MS = 120;
-
 const draggingField = StateField.define<boolean>({
   create: () => false,
   update(value, tr) {
@@ -67,6 +63,8 @@ function buildTooltip(view: EditorView): HTMLElement {
   return dom;
 }
 
+const createToolbar = (view: EditorView) => ({ dom: buildTooltip(view) });
+
 const bubblePlugin = ViewPlugin.fromClass(
   class {
     private onDown = () => this.view.dispatch({ effects: setDragging.of(true) });
@@ -106,13 +104,10 @@ const bubbleTooltip = showTooltip.compute([draggingField, bubbleFocusField, "sel
     above: true,
     strictSide: false,
     arrow: false,
-    create: (view: EditorView) => {
-      const dom = buildTooltip(view);
-      // The tooltip is rebuilt whenever the selection changes. Only animate the
-      // first appearance, not every rebuild while the user extends a selection.
-      if (Date.now() - lastHidden < REBUILD_WINDOW_MS) dom.classList.add("no-enter");
-      return { dom, destroy: () => void (lastHidden = Date.now()) };
-    },
+    // CodeMirror keeps a tooltip's DOM when the new value has the same `create`
+    // function, and only moves it. A stable function means the toolbar glides
+    // with the selection instead of being rebuilt (and re-animated) each time.
+    create: createToolbar,
   };
 });
 

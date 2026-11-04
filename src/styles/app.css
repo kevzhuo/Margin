@@ -696,7 +696,7 @@ html.titlebar-overlay .outline {
   background: var(--accent);
 }
 .button.danger {
-  background: var(--danger);
+  background: var(--danger-bg);
 }
 .button.primary:hover,
 .button.danger:hover {
@@ -799,6 +799,9 @@ html.titlebar-overlay .outline {
   outline: none;
   user-select: text;
   -webkit-user-select: text;
+}
+.palette-input:focus-visible {
+  outline: none;
 }
 .palette-input::placeholder {
   color: var(--text-3);

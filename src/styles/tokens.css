@@ -20,6 +20,7 @@
   --tl-border: rgba(0, 0, 0, 0.14);
   --shadow: 0 0 0 1px rgba(15, 15, 15, 0.05), 0 3px 6px rgba(15, 15, 15, 0.1), 0 9px 24px rgba(15, 15, 15, 0.2);
   --danger: #c0392b;
+  --danger-bg: #d0392b;
 
   --code-keyword: #a626a4;
   --code-string: #0b6e5a;
@@ -83,6 +84,7 @@
   --bg-active: rgba(255, 255, 255, 0.1);
   --backdrop: rgba(0, 0, 0, 0.45);
   --danger: #ff6b6b;
+  --danger-bg: #c93b34;
 
   --code-keyword: #c678dd;
   --code-string: #98c379;
