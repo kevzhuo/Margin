@@ -9,6 +9,7 @@ import { livePreview, linkHrefAt, type LivePreviewOptions } from "./livePreview"
 import { codeHighlighting } from "./highlight";
 import { formattingKeys } from "./commands";
 import { slashMenu } from "./slashMenu";
+import { bubbleToolbar } from "./bubbleToolbar";
 
 export interface EditorCallbacks {
   onDocChanged?: (doc: string, update: ViewUpdate) => void;
@@ -36,6 +37,7 @@ export function editorExtensions(opts: Omit<CreateEditorOptions, "parent" | "doc
     codeHighlighting,
     livePreview(opts.preview ?? {}),
     slashMenu,
+    bubbleToolbar(),
     placeholder("Type / for commands"),
     formattingKeys,
     keymap.of([...markdownKeymap, ...searchKeymap, indentWithTab, ...historyKeymap, ...defaultKeymap]),
