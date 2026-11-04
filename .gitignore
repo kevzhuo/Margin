@@ -11,3 +11,6 @@ playwright/.cache
 # Tauri
 src-tauri/target
 src-tauri/gen/schemas
+
+# Claude Code worktrees and local settings
+.claude/
