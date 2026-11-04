@@ -47,10 +47,12 @@ export function slashSource(context: CompletionContext): CompletionResult | null
   const m = /^(\s*)\/([\w ]*)$/.exec(before);
   if (!m) return null;
   const from = line.from + m[1].length;
-  const options: Completion[] = BLOCK_ITEMS.map((item) => ({
+  const options: Completion[] = BLOCK_ITEMS.map((item, index) => ({
     label: item.label,
     detail: item.detail,
     type: "block",
+    // Keep the authored order instead of CodeMirror's alphabetical default.
+    boost: BLOCK_ITEMS.length - index,
     apply: (view, _completion, _from, to) => applyTemplate(view, item, from, to),
   }));
   return {

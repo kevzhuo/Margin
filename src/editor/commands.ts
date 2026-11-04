@@ -61,7 +61,7 @@ export function setHeading(level: number): Command {
         const m = /^(#{1,6})\s+/.exec(line.text);
         const current = m ? m[1].length : 0;
         const prefixLen = m ? m[0].length : 0;
-        const next = current === level ? "" : "#".repeat(level) + " ";
+        const next = current === level || level === 0 ? "" : "#".repeat(level) + " ";
         changes.push({ from: line.from, to: line.from + prefixLen, insert: next });
       }
     }
