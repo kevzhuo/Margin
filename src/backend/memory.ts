@@ -1,0 +1,298 @@
+import {
+  basename,
+  dirname,
+  flattenFiles,
+  isMarkdown,
+  joinPath,
+  type FileNode,
+  type VaultBackend,
+  type WatchEvent,
+} from "./types";
+
+export const DEMO_ROOT = "/Demo Vault";
+const STORAGE_KEY = "margin.demoVault.v1";
+
+const DESIGN_NOTES = `# Editor design notes
+
+The editor should feel like **Typora**: one pane, no preview toggle, and the *syntax only shows where you are typing*. Everything else reads like a finished page.
+
+## Principles
+
+- Files on disk are the source of truth, never a database export.
+- Nothing moves when you click into a line. Headings keep their size whether the \`#\` is visible or not.
+- Chrome stays out of the way. Formatting lives in shortcuts, a \`/\` menu and a bubble toolbar over selected text.
+
+## Open questions
+
+- [x] Pick the editor engine (CodeMirror 6 and Lezer)
+- [ ] Decide how a table is edited while the caret is inside it
+- [ ] Test IME composition on WKWebView before committing to Tauri
+
+> A good tool is one you forget you are using. The comparison of engines lives in [the research notes](https://github.com/kevzhuo/margin).
+
+## Decoration plan
+
+\`\`\`ts
+const HIDE = new Set(["HeaderMark", "EmphasisMark", "CodeMark", "LinkMark"]);
+
+// Delimiters become empty replace decorations unless the
+// selection touches the element they belong to.
+if (!touches(parent.from, parent.to)) {
+  ranges.push(Decoration.replace({}).range(node.from, node.to));
+}
+\`\`\`
+
+| Node | Reveals when | Widget |
+| --- | --- | --- |
+| Heading | caret on the line | none, line class only |
+| Emphasis, code, link | caret inside the element | none |
+| Task item | caret on the line | checkbox |
+| Table | caret inside the table | cell editor |
+
+---
+
+Type \`/\` on an empty line to insert a block.
+`;
+
+const ROADMAP = `# Roadmap
+
+## Now
+
+1. Live preview for every CommonMark and GFM construct
+2. Vault sidebar with create, rename and delete
+3. Autosave with atomic writes
+
+## Next
+
+- Quick switcher and full-text search
+- Wiki links and backlinks
+- Math blocks rendered with KaTeX
+- Export to HTML and PDF
+
+## Later
+
+- Mobile companion
+- Plugin API
+`;
+
+const TAURI_VS_ELECTRON = `# Tauri vs Electron
+
+Tauri wins on size and on the native feel of the window chrome. Electron wins on consistency: one rendering engine on every platform and a plugin ecosystem that can \`require\` Node modules.
+
+| | Tauri 2 | Electron |
+| --- | --- | --- |
+| Installer | 3 to 10 MB | 85 to 250 MB |
+| Webview | system | bundled Chromium |
+| Backend | Rust | Node.js |
+
+**Decision:** Tauri, because the app should feel like it belongs on a Mac. We test IME and scrolling on WKWebView early.
+`;
+
+const JOURNAL_1 = `# 2026-11-04
+
+Spent the morning on the decoration layer. The trick that made everything click: block markers live in the left margin instead of pushing the text around.
+
+- [x] Heading reveal with stable layout
+- [x] Bullets that keep their width
+- [ ] Table widget
+
+Tomorrow: the slash menu.
+`;
+
+const JOURNAL_2 = `# 2026-11-03
+
+Read through the Obsidian forum threads on Live Preview. The consensus is that the hard part is not hiding syntax, it is keeping lines from jumping when you click into them.
+
+Quote of the day:
+
+> Make it work, make it right, make it fast.
+`;
+
+const READING = `# Reading list
+
+- *The Elements of Typographic Style*, Robert Bringhurst
+- *Designing Interfaces*, Jenifer Tidwell
+- CodeMirror 6 system guide, https://codemirror.net/docs/guide/
+- Lezer Markdown parser, https://github.com/lezer-parser/markdown
+`;
+
+const INBOX = `# Inbox
+
+Loose thoughts go here before they get a home.
+
+- Try ~~Inter~~ SF Pro for body text on macOS
+- Escaped characters: \\*not emphasis\\*
+- Image syntax renders inline: ![Margin logo](https://raw.githubusercontent.com/github/explore/main/topics/markdown/markdown.png)
+`;
+
+const DEFAULT_FILES: Record<string, string> = {
+  [`${DEMO_ROOT}/Projects/Editor design notes.md`]: DESIGN_NOTES,
+  [`${DEMO_ROOT}/Projects/Roadmap.md`]: ROADMAP,
+  [`${DEMO_ROOT}/Projects/Tauri vs Electron.md`]: TAURI_VS_ELECTRON,
+  [`${DEMO_ROOT}/Journal/2026-11-04.md`]: JOURNAL_1,
+  [`${DEMO_ROOT}/Journal/2026-11-03.md`]: JOURNAL_2,
+  [`${DEMO_ROOT}/Reading/Reading list.md`]: READING,
+  [`${DEMO_ROOT}/Templates/Daily note.md`]: `# {{date}}\n\n## Today\n\n- \n\n## Notes\n\n`,
+  [`${DEMO_ROOT}/Inbox.md`]: INBOX,
+};
+
+interface Persisted {
+  files: Record<string, string>;
+}
+
+function load(): Record<string, string> {
+  try {
+    const raw = globalThis.localStorage?.getItem(STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as Persisted;
+      if (parsed && parsed.files && typeof parsed.files === "object") return { ...parsed.files };
+    }
+  } catch {
+    // ignore storage failures (private mode, quota, etc.)
+  }
+  return { ...DEFAULT_FILES };
+}
+
+/**
+ * In-memory vault with a handful of demo notes. Used in the browser (dev
+ * server, Playwright) where there is no file system.
+ */
+export class MemoryBackend implements VaultBackend {
+  readonly kind = "memory" as const;
+  private files: Record<string, string>;
+  private listeners = new Set<(e: WatchEvent) => void>();
+
+  constructor(initial?: Record<string, string>) {
+    this.files = initial ? { ...initial } : load();
+  }
+
+  private persist() {
+    try {
+      globalThis.localStorage?.setItem(STORAGE_KEY, JSON.stringify({ files: this.files } satisfies Persisted));
+    } catch {
+      // ignore
+    }
+  }
+
+  private emit(event: WatchEvent) {
+    for (const l of this.listeners) l(event);
+  }
+
+  /** Test helper: reset to the default demo notes. */
+  reset() {
+    this.files = { ...DEFAULT_FILES };
+    this.persist();
+  }
+
+  async pickVault(): Promise<string | null> {
+    return DEMO_ROOT;
+  }
+
+  async listTree(root: string): Promise<FileNode[]> {
+    const prefix = root.endsWith("/") ? root : root + "/";
+    const dirs = new Map<string, FileNode>();
+    const rootChildren: FileNode[] = [];
+
+    const ensureDir = (path: string): FileNode[] => {
+      if (path === root || path === "") return rootChildren;
+      let node = dirs.get(path);
+      if (!node) {
+        node = { name: basename(path), path, kind: "dir", children: [] };
+        dirs.set(path, node);
+        ensureDir(dirname(path)).push(node);
+      }
+      return node.children!;
+    };
+
+    for (const path of Object.keys(this.files)) {
+      if (!path.startsWith(prefix) || !isMarkdown(path)) continue;
+      ensureDir(dirname(path)).push({ name: basename(path), path, kind: "file" });
+    }
+
+    const sort = (list: FileNode[]) => {
+      list.sort((a, b) =>
+        a.kind !== b.kind ? (a.kind === "dir" ? -1 : 1) : a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" }),
+      );
+      for (const n of list) if (n.children) sort(n.children);
+    };
+    sort(rootChildren);
+    return rootChildren;
+  }
+
+  async readNote(path: string): Promise<string> {
+    const content = this.files[path];
+    if (content === undefined) throw new Error(`No such note: ${path}`);
+    return content;
+  }
+
+  async writeNote(path: string, content: string): Promise<void> {
+    this.files[path] = content;
+    this.persist();
+  }
+
+  async createNote(dir: string, name: string): Promise<string> {
+    const base = name.replace(/\.md$/i, "") || "Untitled";
+    let candidate = joinPath(dir, `${base}.md`);
+    let i = 2;
+    while (this.files[candidate] !== undefined) {
+      candidate = joinPath(dir, `${base} ${i}.md`);
+      i++;
+    }
+    this.files[candidate] = `# ${basename(candidate).replace(/\.md$/i, "")}\n\n`;
+    this.persist();
+    this.emit({ kind: "create", paths: [candidate] });
+    return candidate;
+  }
+
+  async renamePath(from: string, to: string): Promise<void> {
+    if (this.files[from] !== undefined) {
+      if (this.files[to] !== undefined) throw new Error(`Already exists: ${to}`);
+      this.files[to] = this.files[from];
+      delete this.files[from];
+    } else {
+      // directory rename
+      const prefix = from.endsWith("/") ? from : from + "/";
+      const moved: Record<string, string> = {};
+      for (const [p, c] of Object.entries(this.files)) {
+        if (p.startsWith(prefix)) {
+          moved[joinPath(to, p.slice(prefix.length))] = c;
+          delete this.files[p];
+        }
+      }
+      Object.assign(this.files, moved);
+    }
+    this.persist();
+    this.emit({ kind: "rename", paths: [from, to] });
+  }
+
+  async deletePath(path: string): Promise<void> {
+    if (this.files[path] !== undefined) {
+      delete this.files[path];
+    } else {
+      const prefix = path.endsWith("/") ? path : path + "/";
+      for (const p of Object.keys(this.files)) if (p.startsWith(prefix)) delete this.files[p];
+    }
+    this.persist();
+    this.emit({ kind: "remove", paths: [path] });
+  }
+
+  async watch(_root: string, onEvent: (event: WatchEvent) => void): Promise<() => void> {
+    this.listeners.add(onEvent);
+    return () => this.listeners.delete(onEvent);
+  }
+
+  resolveAsset(_notePath: string, src: string): string {
+    return src;
+  }
+
+  async openExternal(url: string): Promise<void> {
+    globalThis.open?.(url, "_blank", "noopener");
+  }
+
+  /** Test helper. */
+  allFiles(): FileNode[] {
+    const tree: FileNode[] = [];
+    for (const path of Object.keys(this.files)) tree.push({ name: basename(path), path, kind: "file" });
+    return flattenFiles(tree);
+  }
+}

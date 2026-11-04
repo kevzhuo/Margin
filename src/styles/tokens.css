@@ -1,0 +1,75 @@
+/* Design tokens. Light values follow Notion's warm neutrals; the chrome
+   follows macOS. Dark values mirror Notion's dark palette. */
+:root {
+  color-scheme: light;
+  --bg: #ffffff;
+  --bg-sidebar: #f7f6f3;
+  --bg-hover: rgba(55, 53, 47, 0.08);
+  --bg-selected: rgba(55, 53, 47, 0.09);
+  --bg-elevated: #ffffff;
+  --text: #37352f;
+  --text-2: rgba(55, 53, 47, 0.78);
+  --text-3: rgba(55, 53, 47, 0.7);
+  --border: rgba(55, 53, 47, 0.11);
+  --accent: #2383e2;
+  --selection: rgba(35, 131, 226, 0.28);
+  --code-text: #b3261e;
+  --code-bg: rgba(135, 131, 120, 0.15);
+  --fence-bg: #f7f6f3;
+  --quote-border: #d9d8d3;
+  --tl-border: rgba(0, 0, 0, 0.14);
+  --shadow: 0 0 0 1px rgba(15, 15, 15, 0.05), 0 3px 6px rgba(15, 15, 15, 0.1), 0 9px 24px rgba(15, 15, 15, 0.2);
+  --danger: #c0392b;
+
+  --code-keyword: #a626a4;
+  --code-string: #0b6e5a;
+  --code-comment: #5c6370;
+  --code-function: #0550ae;
+  --code-number: #986801;
+  --code-property: #0550ae;
+  --code-tag: #22863a;
+  --code-invalid: #b3261e;
+
+  --font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Segoe UI", system-ui, sans-serif;
+  --font-editor: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "SF Mono", "JetBrains Mono", Menlo, Consolas, "Liberation Mono", monospace;
+
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+  --sidebar-width: 240px;
+  --outline-width: 220px;
+  --topbar-height: 52px;
+  --editor-measure: 720px;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #191919;
+  --bg-sidebar: #202020;
+  --bg-hover: rgba(255, 255, 255, 0.055);
+  --bg-selected: rgba(255, 255, 255, 0.08);
+  --bg-elevated: #252525;
+  --text: rgba(255, 255, 255, 0.86);
+  --text-2: rgba(255, 255, 255, 0.62);
+  --text-3: rgba(255, 255, 255, 0.5);
+  --border: rgba(255, 255, 255, 0.1);
+  --accent: #529cca;
+  --selection: rgba(82, 156, 202, 0.35);
+  --code-text: #ff7b72;
+  --code-bg: rgba(255, 255, 255, 0.09);
+  --fence-bg: #222222;
+  --quote-border: rgba(255, 255, 255, 0.22);
+  --tl-border: rgba(255, 255, 255, 0.12);
+  --shadow: 0 0 0 1px rgba(255, 255, 255, 0.08), 0 3px 6px rgba(0, 0, 0, 0.35), 0 9px 24px rgba(0, 0, 0, 0.45);
+  --danger: #ff6b6b;
+
+  --code-keyword: #c678dd;
+  --code-string: #98c379;
+  --code-comment: #8b949e;
+  --code-function: #61afef;
+  --code-number: #d19a66;
+  --code-property: #61afef;
+  --code-tag: #7ee787;
+  --code-invalid: #ff7b72;
+}

@@ -1,0 +1,455 @@
+/* CodeMirror surface, styled as a Typora-like page. Every markdown class
+   below is produced by src/editor/livePreview.ts. */
+
+.cm-editor {
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-editor);
+  font-size: 16px;
+}
+.cm-editor.cm-focused {
+  outline: none;
+}
+.cm-scroller {
+  overflow: auto;
+  line-height: 1.6;
+  font-family: inherit;
+}
+.cm-content {
+  max-width: calc(var(--editor-measure) + 96px);
+  width: 100%;
+  margin: 0 auto;
+  padding: 24px 48px 45vh;
+  caret-color: var(--text);
+}
+.cm-line {
+  position: relative;
+  padding: 2px 0;
+}
+.cm-cursor,
+.cm-dropCursor {
+  border-left: 2px solid var(--text);
+  margin-left: -1px;
+}
+.cm-selectionBackground,
+.cm-editor ::selection {
+  background: var(--selection) !important;
+}
+.cm-focused .cm-selectionBackground {
+  background: var(--selection) !important;
+}
+.cm-placeholder {
+  color: var(--text-3);
+}
+
+/* ---------- Delimiters ---------- */
+.cm-md-mark {
+  color: var(--text-3);
+  font-weight: 400;
+  font-style: normal;
+  text-decoration: none;
+  white-space: pre;
+}
+.cm-md-margin-mark {
+  position: absolute;
+  right: 100%;
+  margin-right: 10px;
+  top: 2px;
+  white-space: pre;
+  pointer-events: none;
+}
+.cm-md-ghost {
+  font-size: 13px;
+  top: 0.45em;
+}
+
+/* ---------- Headings ---------- */
+.cm-md-heading {
+  font-weight: 700;
+  letter-spacing: -0.012em;
+}
+.cm-md-h1 {
+  font-size: 1.875em;
+  line-height: 1.25;
+  padding-top: 18px;
+  padding-bottom: 6px;
+}
+.cm-md-h2 {
+  font-size: 1.375em;
+  line-height: 1.3;
+  font-weight: 600;
+  padding-top: 18px;
+  padding-bottom: 2px;
+}
+.cm-md-h3 {
+  font-size: 1.125em;
+  line-height: 1.35;
+  font-weight: 600;
+  padding-top: 12px;
+}
+.cm-md-h4,
+.cm-md-h5,
+.cm-md-h6 {
+  font-size: 1em;
+  font-weight: 600;
+  padding-top: 8px;
+}
+.cm-md-h6 {
+  color: var(--text-2);
+}
+.cm-md-setext-underline {
+  color: var(--text-3);
+  font-size: 0.75em;
+  line-height: 1;
+}
+.cm-md-heading .cm-md-margin-mark {
+  font-weight: 400;
+}
+.cm-md-h1 .cm-md-margin-mark {
+  top: 18px;
+}
+.cm-md-h2 .cm-md-margin-mark {
+  top: 18px;
+}
+.cm-md-h3 .cm-md-margin-mark {
+  top: 12px;
+}
+.cm-md-h4 .cm-md-margin-mark,
+.cm-md-h5 .cm-md-margin-mark,
+.cm-md-h6 .cm-md-margin-mark {
+  top: 8px;
+}
+
+/* ---------- Inline ---------- */
+.cm-md-strong {
+  font-weight: 600;
+}
+.cm-md-em {
+  font-style: italic;
+}
+.cm-md-strike {
+  text-decoration: line-through;
+  text-decoration-color: var(--text-3);
+}
+.cm-md-inline-code {
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  background: var(--code-bg);
+  color: var(--code-text);
+  padding: 2px 4px;
+  border-radius: var(--radius-sm);
+}
+.cm-md-inline-code .cm-md-mark {
+  color: var(--text-3);
+}
+.cm-md-link {
+  color: var(--text);
+  text-decoration: underline;
+  text-decoration-color: var(--text-3);
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.cm-md-link:hover {
+  text-decoration-color: var(--text);
+}
+.cm-md-link .cm-md-mark {
+  text-decoration: none;
+  cursor: text;
+}
+.cm-md-html {
+  color: var(--text-3);
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+}
+.cm-md-image {
+  display: inline-block;
+  max-width: 100%;
+  vertical-align: middle;
+}
+.cm-md-image img {
+  display: block;
+  max-width: 100%;
+  border-radius: var(--radius-md);
+}
+.cm-md-image-broken {
+  color: var(--text-3);
+  font-style: italic;
+}
+
+/* ---------- Lists ---------- */
+.cm-md-listmark,
+.cm-md-bullet {
+  display: inline-block;
+  width: 1.3em;
+  text-align: left;
+}
+.cm-md-listmark {
+  color: var(--text-3);
+}
+.cm-md-bullet {
+  position: relative;
+  vertical-align: baseline;
+}
+.cm-md-bullet::before {
+  content: "";
+  position: absolute;
+  left: 0.18em;
+  top: -0.62em;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text);
+}
+.cm-md-bullet-1::before,
+.cm-md-bullet-2::before,
+.cm-md-bullet-3::before {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--text);
+}
+.cm-md-bullet-2::before,
+.cm-md-bullet-3::before {
+  border-radius: 1px;
+  box-shadow: none;
+  background: var(--text);
+  width: 5px;
+  height: 5px;
+}
+.cm-md-olmark {
+  color: var(--text-2);
+}
+.cm-md-checkbox {
+  display: inline-block;
+  width: 1.6em;
+  vertical-align: baseline;
+  position: relative;
+  height: 1em;
+}
+.cm-md-checkbox input {
+  position: absolute;
+  left: 0;
+  top: -0.15em;
+  appearance: none;
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  border: 1.5px solid var(--text-3);
+  border-radius: 4px;
+  background: var(--bg);
+  cursor: pointer;
+}
+.cm-md-checkbox input:checked {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.cm-md-checkbox input:checked::after {
+  content: "";
+  position: absolute;
+  left: 4.5px;
+  top: 1px;
+  width: 4px;
+  height: 8px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+.cm-md-task-done {
+  color: var(--text-3);
+}
+.cm-md-task-done .cm-md-strong,
+.cm-md-task-done .cm-md-em {
+  color: inherit;
+}
+
+/* ---------- Blockquote ---------- */
+.cm-md-quote {
+  border-left: 3px solid var(--quote-border);
+  padding-left: 16px !important;
+  margin-left: 0;
+}
+.cm-md-quote .cm-md-margin-mark {
+  margin-right: 10px;
+}
+
+/* ---------- Code fences ---------- */
+.cm-md-fence {
+  background: var(--fence-bg);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.55;
+  padding-left: 14px !important;
+  padding-right: 14px !important;
+  border-left: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+}
+.cm-md-fence-head {
+  border-top: 1px solid var(--border);
+  border-top-left-radius: var(--radius-md);
+  border-top-right-radius: var(--radius-md);
+  padding-top: 6px !important;
+  margin-top: 6px;
+  color: var(--text-3);
+}
+.cm-md-fence-foot {
+  border-bottom: 1px solid var(--border);
+  border-bottom-left-radius: var(--radius-md);
+  border-bottom-right-radius: var(--radius-md);
+  padding-bottom: 6px !important;
+  margin-bottom: 6px;
+}
+.cm-md-fence-active {
+  background: var(--fence-bg);
+}
+.cm-md-fence .cm-md-mark {
+  font-family: var(--font-mono);
+}
+.cm-md-lang {
+  float: right;
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-3);
+  user-select: none;
+  -webkit-user-select: none;
+}
+.cm-md-indented-code {
+  border-radius: var(--radius-md);
+}
+
+/* ---------- Tables ---------- */
+.cm-md-table {
+  padding: 6px 0;
+  font-size: 14px;
+  line-height: 1.45;
+}
+.cm-md-table table {
+  border-collapse: collapse;
+  width: 100%;
+}
+.cm-md-table th,
+.cm-md-table td {
+  border: 1px solid var(--border);
+  padding: 6px 10px;
+  text-align: left;
+  vertical-align: top;
+  cursor: text;
+}
+.cm-md-table th {
+  background: var(--bg-sidebar);
+  font-weight: 500;
+  color: var(--text-2);
+}
+.cm-md-table-raw {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  white-space: pre;
+}
+
+/* ---------- Horizontal rule ---------- */
+.cm-md-hr {
+  display: inline-block;
+  width: 100%;
+  height: 1px;
+  background: var(--border);
+  vertical-align: middle;
+}
+.cm-md-hr-line {
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+
+/* ---------- Front matter ---------- */
+.cm-md-frontmatter {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--text-3);
+  background: var(--fence-bg);
+  padding-left: 14px !important;
+  padding-right: 14px !important;
+}
+
+/* ---------- Slash menu ---------- */
+.cm-tooltip.cm-slash-menu {
+  background: var(--bg-elevated);
+  border: 0;
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  padding: 6px;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  color: var(--text);
+}
+.cm-tooltip.cm-slash-menu > ul {
+  font-family: inherit;
+  max-height: 320px;
+  min-width: 300px;
+}
+.cm-tooltip.cm-slash-menu > ul > li.cm-slash-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 8px;
+  border-radius: var(--radius-md);
+  line-height: 1.3;
+}
+.cm-tooltip.cm-slash-menu > ul > li[aria-selected] {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+.cm-slash-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-md);
+  box-shadow: inset 0 0 0 1px var(--border);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+  flex: none;
+}
+.cm-slash-icon svg {
+  width: 18px;
+  height: 18px;
+}
+.cm-tooltip.cm-slash-menu .cm-completionLabel {
+  font-size: 14px;
+}
+.cm-tooltip.cm-slash-menu .cm-completionDetail {
+  display: block;
+  margin-left: 0;
+  font-style: normal;
+  font-size: 12px;
+  color: var(--text-2);
+}
+.cm-tooltip.cm-slash-menu .cm-completionMatchedText {
+  text-decoration: none;
+  font-weight: 600;
+}
+
+/* ---------- Search panel ---------- */
+.cm-panels {
+  background: var(--bg-sidebar);
+  color: var(--text);
+  border-bottom: 1px solid var(--border);
+  font-family: var(--font-ui);
+  font-size: 13px;
+}
+.cm-panel.cm-search input,
+.cm-panel.cm-search button {
+  font: inherit;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--text);
+  padding: 2px 6px;
+  margin: 0 2px;
+}
+.cm-searchMatch {
+  background: rgba(255, 200, 0, 0.3);
+}
+.cm-searchMatch.cm-searchMatch-selected {
+  background: rgba(255, 150, 0, 0.5);
+}
