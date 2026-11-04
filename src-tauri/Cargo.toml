@@ -27,7 +27,7 @@ trash = "5"
 # `macOSPrivateApi`, so the feature must be enabled on macOS only. Cargo merges
 # this with the entry above.
 [target.'cfg(target_os = "macos")'.dependencies]
-tauri = { version = "2", features = ["protocol-asset"] }
+tauri = { version = "2", features = ["protocol-asset", "macos-private-api"] }
 
 [dev-dependencies]
 tempfile = "3"
