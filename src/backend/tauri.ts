@@ -1,8 +1,8 @@
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
-import { openUrl } from "@tauri-apps/plugin-opener";
-import { dirname, type FileNode, type VaultBackend, type WatchEvent } from "./types";
+import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
+import { dirname, type FileNode, type SearchHit, type VaultBackend, type WatchEvent } from "./types";
 
 /**
  * Rust command contract (see src-tauri/src/vault.rs):
@@ -11,6 +11,8 @@ import { dirname, type FileNode, type VaultBackend, type WatchEvent } from "./ty
  *   read_note(path: string)                     -> string
  *   write_note(path: string, content: string)   -> void      (atomic: temp + rename)
  *   create_note(dir: string, name: string)      -> string    (new absolute path)
+ *   create_folder(dir: string, name: string)    -> string    (new absolute path)
+ *   search_vault(query: string, limit: number)  -> SearchHit[]
  *   rename_path(from: string, to: string)       -> void
  *   delete_path(path: string)                   -> void      (moves to trash)
  *   watch_vault(root: string)                   -> void      (emits "vault://changed")
@@ -41,6 +43,18 @@ export class TauriBackend implements VaultBackend {
 
   createNote(dir: string, name: string): Promise<string> {
     return invoke<string>("create_note", { dir, name });
+  }
+
+  createFolder(dir: string, name: string): Promise<string> {
+    return invoke<string>("create_folder", { dir, name });
+  }
+
+  searchVault(_root: string, query: string, limit = 100): Promise<SearchHit[]> {
+    return invoke<SearchHit[]>("search_vault", { query, limit });
+  }
+
+  async revealPath(path: string): Promise<void> {
+    await revealItemInDir(path);
   }
 
   renamePath(from: string, to: string): Promise<void> {

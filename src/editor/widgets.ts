@@ -53,15 +53,27 @@ export class CheckboxWidget extends WidgetType {
     wrap.className = "cm-md-checkbox";
     const input = document.createElement("input");
     input.type = "checkbox";
-    input.checked = this.checked;
-    input.setAttribute("aria-label", this.checked ? "Mark task as not done" : "Mark task as done");
+    this.sync(input);
+    // Keep focus in the editor.
     input.addEventListener("mousedown", (e) => e.preventDefault());
-    input.addEventListener("click", (e) => {
-      e.preventDefault();
-      toggleTaskAt(view, view.posAtDOM(wrap));
+    // Let the native toggle happen (cancelling the click would make the browser
+    // restore the old state after we update it), then mirror it into the document.
+    input.addEventListener("change", () => {
+      if (!toggleTaskAt(view, view.posAtDOM(wrap))) input.checked = !input.checked;
     });
     wrap.appendChild(input);
     return wrap;
+  }
+  /** Reuse the element when only the checked state changed, so CSS transitions play. */
+  updateDOM(dom: HTMLElement) {
+    const input = dom.querySelector("input");
+    if (!input) return false;
+    this.sync(input);
+    return true;
+  }
+  private sync(input: HTMLInputElement) {
+    input.checked = this.checked;
+    input.setAttribute("aria-label", this.checked ? "Mark task as not done" : "Mark task as done");
   }
   ignoreEvent() {
     return true;

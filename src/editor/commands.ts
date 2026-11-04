@@ -2,6 +2,7 @@ import { EditorSelection, type ChangeSpec, type EditorState, type SelectionRange
 import { EditorView, keymap, type Command, type KeyBinding } from "@codemirror/view";
 import { syntaxTree } from "@codemirror/language";
 import { toggleTaskAt } from "./widgets";
+import { scrollToPos } from "./scroll";
 
 function wrapRange(state: EditorState, range: SelectionRange, left: string, right: string) {
   const from = range.from;
@@ -119,10 +120,11 @@ export const toggleBlockquote: Command = (view) => {
   return true;
 };
 
-/** Jump the caret to the heading or element that contains `pos`. */
+/** Move the caret to `pos` and glide the view so that line sits near the top. */
 export function selectAt(view: EditorView, pos: number) {
-  view.dispatch({ selection: { anchor: pos }, scrollIntoView: true, effects: EditorView.scrollIntoView(pos, { y: "start", yMargin: 48 }) });
+  view.dispatch({ selection: { anchor: pos } });
   view.focus();
+  scrollToPos(view, pos, { align: "start", margin: 48, smooth: true });
 }
 
 export function headingLevelAt(state: EditorState, pos: number): number {

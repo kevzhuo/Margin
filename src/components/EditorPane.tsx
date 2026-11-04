@@ -1,90 +1,197 @@
 import { useEffect, useRef } from "react";
-import type { EditorView } from "@codemirror/view";
-import { createEditor, createEditorState } from "../editor/createEditor";
+import { EditorSelection } from "@codemirror/state";
+import type { EditorView, ViewUpdate } from "@codemirror/view";
+import { createEditor, createEditorState, type CreateEditorOptions } from "../editor/createEditor";
 import { countWords, extractHeadings } from "../editor/outline";
-import { useStore } from "../state/store";
+import { scrollToPos } from "../editor/scroll";
+import { dirname, findMatch, flattenFiles, resolveRelative, slugify } from "../backend";
+import { useStore, type Jump } from "../state/store";
+
+const MAX_SELECTION_COUNT = 200_000;
+
+function onUpdate(update: ViewUpdate) {
+  const s = useStore.getState();
+  if (update.docChanged || update.viewportChanged) s.setHeadings(extractHeadings(update.state));
+  if (update.selectionSet || update.docChanged) {
+    const sel = update.state.selection.main;
+    s.setCaret(sel.head);
+    s.setSelectionWords(sel.empty || sel.to - sel.from > MAX_SELECTION_COUNT ? 0 : countWords(update.state.doc.slice(sel.from, sel.to)));
+  }
+}
+
+/** Follow a link clicked in the editor: in-note anchors, other notes, or the browser. */
+function openLink(href: string) {
+  const s = useStore.getState();
+  const raw = href.trim();
+  const current = s.activePath;
+  if (raw.startsWith("#")) {
+    if (current) void s.openNote(current, { jump: { heading: decodeURIComponent(raw.slice(1)) } });
+    return;
+  }
+  const target = current ? resolveRelative(dirname(current), raw) : null;
+  if (target === null) {
+    void s.backend?.openExternal(raw);
+    return;
+  }
+  const anchor = raw.includes("#") ? decodeURIComponent(raw.slice(raw.indexOf("#") + 1)) : "";
+  const files = flattenFiles(s.tree).map((f) => f.path);
+  const candidates = /\.(md|markdown)$/i.test(target) ? [target] : [target, `${target}.md`];
+  const found =
+    candidates.map((c) => files.find((f) => f === c)).find(Boolean) ??
+    candidates.map((c) => files.find((f) => f.toLowerCase() === c.toLowerCase())).find(Boolean);
+  if (found) {
+    void s.openNote(found, anchor ? { jump: { heading: anchor } } : undefined);
+  } else {
+    s.pushToast(`No note found at “${raw}”`, "error");
+  }
+}
+
+function applyJump(view: EditorView, jump: Jump, smooth: boolean) {
+  const doc = view.state.doc;
+  let anchor = Math.min(jump.pos ?? 0, doc.length);
+  let head = anchor;
+  if (jump.heading) {
+    const want = slugify(jump.heading);
+    const heading = extractHeadings(view.state).find((h) => slugify(h.text) === want || h.text.toLowerCase() === jump.heading!.toLowerCase());
+    if (heading) anchor = head = heading.pos;
+  }
+  if (jump.line) {
+    const line = doc.line(Math.min(Math.max(1, jump.line), doc.lines));
+    anchor = head = line.from;
+    const m = jump.query ? findMatch(line.text, jump.query) : null;
+    if (m) {
+      anchor = line.from + m[0];
+      head = line.from + m[1];
+    }
+  }
+  view.dispatch({ selection: EditorSelection.single(anchor, head) });
+  view.focus();
+  scrollToPos(view, head, { align: "center", smooth });
+}
 
 export function EditorPane() {
   const hostRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
+  const shownPath = useRef<string | null>(null);
   const activePath = useStore((s) => s.activePath);
-  const content = useStore((s) => s.content);
   const contentVersion = useStore((s) => s.contentVersion);
+  const jumpVersion = useStore((s) => s.jumpVersion);
   const backend = useStore((s) => s.backend);
   const externalChange = useStore((s) => s.externalChange);
   const reloadFromDisk = useStore((s) => s.reloadFromDisk);
   const keepLocal = useStore((s) => s.keepLocal);
+  const fontSize = useStore((s) => s.fontSize);
+  const fontFamily = useStore((s) => s.fontFamily);
+  const lineWidth = useStore((s) => s.lineWidth);
+  const typewriterOn = useStore((s) => s.typewriter);
 
-  // Keep latest callbacks in refs so the editor is created once.
-  const pathRef = useRef(activePath);
-  pathRef.current = activePath;
+  const options = (): Omit<CreateEditorOptions, "parent" | "doc"> => ({
+    preview: {
+      resolveImage: (src) => {
+        const { backend: b, activePath: p } = useStore.getState();
+        return b && p ? b.resolveAsset(p, src) : src;
+      },
+    },
+    onDocChanged: (doc, update) => {
+      useStore.getState().updateContent(doc);
+      useStore.getState().setWordCount(countWords(update.state.doc));
+    },
+    onUpdate,
+    onOpenLink: openLink,
+    onNavigate: (direction) => {
+      const s = useStore.getState();
+      void (direction < 0 ? s.goBack() : s.goForward());
+      return true;
+    },
+    typewriter: () => useStore.getState().typewriter,
+  });
+
+  const rememberView = (path: string | null) => {
+    const view = viewRef.current;
+    if (!view || !path) return;
+    const sel = view.state.selection.main;
+    useStore.getState().saveViewState(path, { anchor: sel.anchor, head: sel.head, scrollTop: Math.round(view.scrollDOM.scrollTop) });
+  };
 
   useEffect(() => {
     if (!hostRef.current || viewRef.current) return;
-    const store = useStore.getState();
-    const view = createEditor({
-      parent: hostRef.current,
-      doc: "",
-      preview: {
-        resolveImage: (src) => {
-          const b = useStore.getState().backend;
-          const p = pathRef.current;
-          return b && p ? b.resolveAsset(p, src) : src;
-        },
-      },
-      onDocChanged: (doc, update) => {
-        useStore.getState().updateContent(doc);
-        useStore.getState().setWordCount(countWords(update.state.doc));
-      },
-      onUpdate: (update) => {
-        if (update.docChanged || update.viewportChanged) {
-          useStore.getState().setHeadings(extractHeadings(update.state));
-        }
-        if (update.selectionSet) useStore.getState().setCaret(update.state.selection.main.head);
-      },
-      onOpenLink: (href) => {
-        void useStore.getState().backend?.openExternal(href);
-      },
-    });
+    const view = createEditor({ parent: hostRef.current, doc: "", ...options() });
     viewRef.current = view;
-    store.setEditor(view);
+    useStore.getState().setEditor(view);
+    const save = () => rememberView(shownPath.current);
+    const onHide = () => document.visibilityState === "hidden" && save();
+    window.addEventListener("beforeunload", save);
+    document.addEventListener("visibilitychange", onHide);
     return () => {
+      save();
+      window.removeEventListener("beforeunload", save);
+      document.removeEventListener("visibilitychange", onHide);
       view.destroy();
       viewRef.current = null;
       useStore.getState().setEditor(null);
     };
+    // The editor is created once; options read the store lazily.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Load a new document whenever the active note (or its on-disk content) changes.
   useEffect(() => {
     const view = viewRef.current;
     if (!view) return;
-    const doc = content ?? "";
-    view.setState(
-      createEditorState(doc, {
-        preview: {
-          resolveImage: (src) => {
-            const b = useStore.getState().backend;
-            const p = pathRef.current;
-            return b && p ? b.resolveAsset(p, src) : src;
-          },
-        },
-        onDocChanged: (d, update) => {
-          useStore.getState().updateContent(d);
-          useStore.getState().setWordCount(countWords(update.state.doc));
-        },
-        onUpdate: (update) => {
-          if (update.docChanged || update.viewportChanged) useStore.getState().setHeadings(extractHeadings(update.state));
-          if (update.selectionSet) useStore.getState().setCaret(update.state.selection.main.head);
-        },
-        onOpenLink: (href) => void useStore.getState().backend?.openExternal(href),
-      }),
-    );
-    useStore.getState().setHeadings(extractHeadings(view.state));
-    useStore.getState().setWordCount(countWords(view.state.doc));
-    if (activePath) view.focus();
+    const s = useStore.getState();
+    const previous = shownPath.current;
+    const switching = previous !== activePath;
+    const before = view.state.selection.main;
+    const beforeScroll = view.scrollDOM.scrollTop;
+    if (switching) rememberView(previous);
+
+    view.setState(createEditorState(s.content ?? "", options()));
+    shownPath.current = activePath;
+    s.setHeadings(extractHeadings(view.state));
+    s.setWordCount(countWords(view.state.doc));
+    s.setSelectionWords(0);
+    if (!activePath) return;
+
+    const len = view.state.doc.length;
+    const jump = s.jump && s.jump.path === activePath ? s.jump : null;
+    if (jump) {
+      useStore.setState({ jump: null });
+      applyJump(view, jump, false);
+    } else if (!switching) {
+      // Reloaded from disk: keep the caret and scroll where they were.
+      view.dispatch({ selection: EditorSelection.single(Math.min(before.anchor, len), Math.min(before.head, len)) });
+      requestAnimationFrame(() => (view.scrollDOM.scrollTop = beforeScroll));
+    } else {
+      const saved = s.viewStates[activePath];
+      if (saved) {
+        view.dispatch({ selection: EditorSelection.single(Math.min(saved.anchor, len), Math.min(saved.head, len)) });
+        requestAnimationFrame(() => (view.scrollDOM.scrollTop = saved.scrollTop));
+      }
+      view.focus();
+    }
+
+    if (switching && hostRef.current) {
+      const host = hostRef.current;
+      host.classList.remove("note-enter");
+      void host.offsetWidth; // restart the animation
+      host.classList.add("note-enter");
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activePath, contentVersion]);
+
+  // Jumps within the note that is already open (search hits, heading links).
+  useEffect(() => {
+    const view = viewRef.current;
+    const jump = useStore.getState().jump;
+    if (!view || !jump || jump.path !== shownPath.current) return;
+    useStore.setState({ jump: null });
+    applyJump(view, jump, true);
+  }, [jumpVersion]);
+
+  // Text size, font, and measure change line heights: let CodeMirror re-measure.
+  useEffect(() => {
+    viewRef.current?.requestMeasure();
+  }, [fontSize, fontFamily, lineWidth, typewriterOn]);
 
   return (
     <div className="editor-pane">
@@ -99,7 +206,14 @@ export function EditorPane() {
           </button>
         </div>
       )}
-      <div ref={hostRef} className="editor-host" data-backend={backend?.kind ?? ""} />
+      <div
+        ref={hostRef}
+        className="editor-host"
+        data-backend={backend?.kind ?? ""}
+        onAnimationEnd={(e) => {
+          if (e.animationName === "note-enter") e.currentTarget.classList.remove("note-enter");
+        }}
+      />
     </div>
   );
 }

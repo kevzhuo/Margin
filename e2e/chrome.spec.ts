@@ -16,8 +16,10 @@ test("theme button cycles system, light, dark", async ({ page }) => {
   await button.click();
   await expect(button).toHaveAttribute("aria-label", "Theme: dark");
   await expect.poll(() => theme(page)).toBe("dark");
-  const bg = await page.evaluate(() => getComputedStyle(document.querySelector(".cm-editor")!).backgroundColor);
-  expect(bg).toBe("rgb(25, 25, 25)");
+  // Colors crossfade briefly; the background settles on the dark value.
+  const bg = () => page.evaluate(() => getComputedStyle(document.querySelector(".cm-editor")!).backgroundColor);
+  await expect.poll(bg).toBe("rgb(25, 25, 25)");
+  await expect(page.locator("html")).not.toHaveClass(/theme-transition/);
   await page.reload();
   await page.waitForSelector('.app[data-ready="true"]');
   await expect.poll(() => theme(page)).toBe("dark");
@@ -34,19 +36,26 @@ test("dark mode follows the system preference", async ({ page }) => {
 });
 
 test("sidebar and outline panels toggle from the top bar and keyboard", async ({ page }) => {
+  // Panels stay mounted and animate their width; closed ones are hidden and inert.
+  const sidebar = page.locator(".sidebar-shell");
+  const outline = page.locator(".outline-shell");
   await expect(page.locator(".sidebar")).toBeVisible();
   await page.getByRole("button", { name: "Hide sidebar" }).click();
-  await expect(page.locator(".sidebar")).toHaveCount(0);
+  await expect(sidebar).toHaveAttribute("data-open", "false");
+  await expect(page.locator(".sidebar")).toBeHidden();
+  await expect.poll(async () => (await sidebar.boundingBox())?.width).toBe(0);
   await page.getByRole("button", { name: "Show sidebar" }).click();
   await expect(page.locator(".sidebar")).toBeVisible();
+  await expect.poll(async () => (await sidebar.boundingBox())?.width).toBe(240);
 
   await expect(page.locator(".outline")).toBeVisible();
   await page.getByRole("button", { name: "Toggle outline panel" }).click();
-  await expect(page.locator(".outline")).toHaveCount(0);
+  await expect(page.locator(".outline")).toBeHidden();
+  await expect(outline).toHaveAttribute("inert", "");
   await page.keyboard.press("Control+Shift+\\");
   await expect(page.locator(".outline")).toBeVisible();
   await page.keyboard.press("Control+\\");
-  await expect(page.locator(".sidebar")).toHaveCount(0);
+  await expect(page.locator(".sidebar")).toBeHidden();
 });
 
 test("word count and breadcrumb reflect the open note", async ({ page }) => {

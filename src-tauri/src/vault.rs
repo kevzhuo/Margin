@@ -7,6 +7,8 @@
 //! read_note(path)            -> string
 //! write_note(path, content)  -> void       (atomic: temp file + rename)
 //! create_note(dir, name)     -> string     (new absolute path)
+//! create_folder(dir, name)   -> string     (new absolute path)
+//! search_vault(query, limit) -> SearchHit[]
 //! rename_path(from, to)      -> void
 //! delete_path(path)          -> void       (moves to the system trash)
 //! watch_vault(root)          -> void       (emits "vault://changed")
@@ -46,6 +48,21 @@ pub struct FileNode {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub children: Option<Vec<FileNode>>,
 }
+
+#[derive(Serialize, Clone, Debug, PartialEq, Eq)]
+pub struct SearchHit {
+    pub path: String,
+    /// 1-based line number.
+    pub line: usize,
+    pub text: String,
+}
+
+/// Longest line text returned in a search hit, in characters.
+const SEARCH_LINE_MAX: usize = 240;
+/// Matches reported per note before moving on to the next one.
+const SEARCH_HITS_PER_FILE: usize = 5;
+/// Notes larger than this are skipped by search.
+const SEARCH_MAX_FILE_BYTES: u64 = 5 * 1024 * 1024;
 
 #[derive(Serialize, Clone, Debug, PartialEq, Eq)]
 pub struct WatchEvent {
@@ -339,10 +356,88 @@ pub fn create_note_in(dir: &Path, name: &str) -> Result<PathBuf, String> {
     Ok(candidate)
 }
 
+/// Create `<dir>/<name>`, de-duplicating as `<name> 2`, `<name> 3`, ...
+pub fn create_folder_in(dir: &Path, name: &str) -> Result<PathBuf, String> {
+    if !dir.is_dir() {
+        return Err(format!("Folder does not exist: {}", dir.display()));
+    }
+    let base = name.trim().replace(['/', '\\'], "-");
+    let base = if base.is_empty() || base == "." || base == ".." {
+        "New folder".to_string()
+    } else {
+        base
+    };
+    let mut candidate = dir.join(&base);
+    let mut i = 2u32;
+    while candidate.exists() {
+        candidate = dir.join(format!("{base} {i}"));
+        i += 1;
+        if i > 10_000 {
+            return Err("Too many folders with that name".to_string());
+        }
+    }
+    fs::create_dir(&candidate).map_err(|e| io_err("Could not create folder", e))?;
+    Ok(candidate)
+}
+
+fn collect_files(nodes: &[FileNode], out: &mut Vec<String>) {
+    for n in nodes {
+        match &n.children {
+            Some(children) => collect_files(children, out),
+            None => out.push(n.path.clone()),
+        }
+    }
+}
+
+/// Case-insensitive substring search over every note under `root`, in the
+/// same order the sidebar lists them.
+pub fn search_dir(root: &Path, query: &str, limit: usize) -> Result<Vec<SearchHit>, String> {
+    let needle = query.trim().to_lowercase();
+    if needle.is_empty() || limit == 0 {
+        return Ok(Vec::new());
+    }
+    let mut files = Vec::new();
+    collect_files(&list_tree_at(root)?, &mut files);
+    let mut hits = Vec::new();
+    for path in files {
+        let too_big = fs::metadata(&path)
+            .map(|m| m.len() > SEARCH_MAX_FILE_BYTES)
+            .unwrap_or(true);
+        if too_big {
+            continue;
+        }
+        let Ok(content) = fs::read_to_string(&path) else {
+            continue;
+        };
+        let mut per_file = 0;
+        for (i, line) in content.lines().enumerate() {
+            if !line.to_lowercase().contains(&needle) {
+                continue;
+            }
+            hits.push(SearchHit {
+                path: path.clone(),
+                line: i + 1,
+                text: line.trim().chars().take(SEARCH_LINE_MAX).collect(),
+            });
+            if hits.len() >= limit {
+                return Ok(hits);
+            }
+            per_file += 1;
+            if per_file >= SEARCH_HITS_PER_FILE {
+                break;
+            }
+        }
+    }
+    Ok(hits)
+}
+
 /// Rename or move; refuses to overwrite an existing destination.
 pub fn rename_checked(from: &Path, to: &Path) -> Result<(), String> {
     if !from.exists() {
         return Err(format!("Does not exist: {}", from.display()));
+    }
+    if to != from && to.starts_with(from) {
+        return Err("Cannot move a folder into itself".to_string());
     }
     if to.exists() {
         return Err(format!("Already exists: {}", to.display()));
@@ -527,6 +622,32 @@ pub fn create_note(
 }
 
 #[tauri::command]
+pub fn create_folder(
+    dir: String,
+    name: String,
+    state: State<'_, VaultState>,
+) -> Result<String, String> {
+    let resolved = state.resolve(&dir)?;
+    let created = create_folder_in(&resolved, &name)?;
+    Ok(display_path(&created))
+}
+
+#[tauri::command]
+pub fn search_vault(
+    query: String,
+    limit: Option<usize>,
+    state: State<'_, VaultState>,
+) -> Result<Vec<SearchHit>, String> {
+    let root = state
+        .root
+        .lock()
+        .unwrap()
+        .clone()
+        .ok_or_else(|| "No vault is open".to_string())?;
+    search_dir(&root, &query, limit.unwrap_or(100).min(1000))
+}
+
+#[tauri::command]
 pub fn rename_path(from: String, to: String, state: State<'_, VaultState>) -> Result<(), String> {
     let from_resolved = state.resolve(&from)?;
     let to_resolved = state.resolve(&to)?;
@@ -597,6 +718,72 @@ mod tests {
         for n in &tree {
             assert!(Path::new(&n.path).is_absolute());
         }
+    }
+
+    #[test]
+    fn create_folder_dedupes_names() {
+        let tmp = tempdir().unwrap();
+        let a = create_folder_in(tmp.path(), "Ideas").unwrap();
+        let b = create_folder_in(tmp.path(), "Ideas").unwrap();
+        let c = create_folder_in(tmp.path(), "  ").unwrap();
+        let d = create_folder_in(tmp.path(), "a/b").unwrap();
+        assert!(a.is_dir() && b.is_dir() && c.is_dir() && d.is_dir());
+        assert_eq!(a.file_name().unwrap(), "Ideas");
+        assert_eq!(b.file_name().unwrap(), "Ideas 2");
+        assert_eq!(c.file_name().unwrap(), "New folder");
+        assert_eq!(d.file_name().unwrap(), "a-b");
+        // Empty folders show up in the tree.
+        let tree = list_tree_at(tmp.path()).unwrap();
+        assert_eq!(tree.len(), 4);
+    }
+
+    #[test]
+    fn search_finds_lines_case_insensitively_in_tree_order() {
+        let tmp = tempdir().unwrap();
+        let root = tmp.path();
+        fs::create_dir(root.join("B")).unwrap();
+        fs::write(root.join("a.md"), "# Alpha\nnothing here\nTypora is nice").unwrap();
+        fs::write(
+            root.join("B/c.md"),
+            "typora again\n\n  indented TYPORA line  ",
+        )
+        .unwrap();
+        fs::write(root.join("B/skip.txt"), "typora in a text file").unwrap();
+        fs::write(root.join(".hidden.md"), "typora hidden").unwrap();
+
+        let hits = search_dir(root, "Typora", 100).unwrap();
+        let summary: Vec<(String, usize, String)> = hits
+            .iter()
+            .map(|h| {
+                (
+                    Path::new(&h.path)
+                        .file_name()
+                        .unwrap()
+                        .to_string_lossy()
+                        .into_owned(),
+                    h.line,
+                    h.text.clone(),
+                )
+            })
+            .collect();
+        assert_eq!(
+            summary,
+            vec![
+                ("c.md".to_string(), 1, "typora again".to_string()),
+                ("c.md".to_string(), 3, "indented TYPORA line".to_string()),
+                ("a.md".to_string(), 3, "Typora is nice".to_string()),
+            ]
+        );
+        assert_eq!(search_dir(root, "typora", 2).unwrap().len(), 2);
+        assert!(search_dir(root, "   ", 10).unwrap().is_empty());
+    }
+
+    #[test]
+    fn rename_refuses_to_move_a_folder_into_itself() {
+        let tmp = tempdir().unwrap();
+        let dir = create_folder_in(tmp.path(), "Outer").unwrap();
+        let err = rename_checked(&dir, &dir.join("Inner")).unwrap_err();
+        assert!(err.contains("into itself"), "{err}");
     }
 
     #[test]

@@ -5,6 +5,7 @@ import {
   dirname,
   flattenFiles,
   getBackend,
+  isWithin,
   joinPath,
   stripExtension,
   type FileNode,
@@ -15,8 +16,55 @@ import type { Heading } from "../editor/outline";
 
 export type ThemePref = "system" | "light" | "dark";
 export type SaveState = "idle" | "saving" | "saved" | "error";
+export type LineWidth = "narrow" | "medium" | "wide";
+export type FontFamily = "sans" | "serif" | "mono";
+
+/** Caret and scroll position remembered per note. */
+export interface ViewState {
+  anchor: number;
+  head: number;
+  scrollTop: number;
+}
+
+/** Where to put the caret after a note opens (search hits, heading links). */
+export interface Jump {
+  path: string;
+  /** 1-based line to jump to. */
+  line?: number;
+  /** Text to select on that line (case-insensitive). */
+  query?: string;
+  /** Absolute document position. */
+  pos?: number;
+  /** Heading slug (for `[text](#heading)` links). */
+  heading?: string;
+}
+
+export interface Toast {
+  id: number;
+  message: string;
+  kind: "info" | "error";
+  leaving?: boolean;
+}
+
+export interface ConfirmRequest {
+  title: string;
+  message?: string;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  danger?: boolean;
+}
 
 const SETTINGS_KEY = "margin.settings.v1";
+
+export const FONT_SIZE_DEFAULT = 16;
+export const FONT_SIZE_MIN = 12;
+export const FONT_SIZE_MAX = 24;
+export const SIDEBAR_WIDTH_DEFAULT = 240;
+export const SIDEBAR_WIDTH_MIN = 180;
+export const SIDEBAR_WIDTH_MAX = 420;
+const HISTORY_MAX = 100;
+const RECENT_MAX = 30;
+const VIEW_STATES_MAX = 100;
 
 interface Settings {
   theme: ThemePref;
@@ -25,6 +73,14 @@ interface Settings {
   sidebarOpen: boolean;
   outlineOpen: boolean;
   expandedDirs: Record<string, boolean>;
+  sidebarWidth: number;
+  fontSize: number;
+  lineWidth: LineWidth;
+  fontFamily: FontFamily;
+  focusMode: boolean;
+  typewriter: boolean;
+  recent: string[];
+  viewStates: Record<string, ViewState>;
 }
 
 const defaultSettings: Settings = {
@@ -34,6 +90,14 @@ const defaultSettings: Settings = {
   sidebarOpen: true,
   outlineOpen: true,
   expandedDirs: {},
+  sidebarWidth: SIDEBAR_WIDTH_DEFAULT,
+  fontSize: FONT_SIZE_DEFAULT,
+  lineWidth: "medium",
+  fontFamily: "sans",
+  focusMode: false,
+  typewriter: false,
+  recent: [],
+  viewStates: {},
 };
 
 function loadSettings(): Settings {
@@ -54,6 +118,15 @@ function saveSettings(s: Settings) {
   }
 }
 
+const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
+
+/** Replace `from` (or anything under it) with the same path under `to`. */
+function remap(path: string, from: string, to: string): string {
+  if (path === from) return to;
+  if (isWithin(path, from)) return to + path.slice(from.length);
+  return path;
+}
+
 export interface AppState {
   backend: VaultBackend | null;
   ready: boolean;
@@ -71,40 +144,82 @@ export interface AppState {
   theme: ThemePref;
   sidebarOpen: boolean;
   outlineOpen: boolean;
-  quickOpen: boolean;
+  sidebarWidth: number;
+  fontSize: number;
+  lineWidth: LineWidth;
+  fontFamily: FontFamily;
+  focusMode: boolean;
+  typewriter: boolean;
+  paletteOpen: boolean;
+  /** Text the palette starts with; ">" opens it in command mode. */
+  paletteSeed: string;
+  paletteVersion: number;
+  settingsOpen: boolean;
   headings: Heading[];
   /** Position of the heading whose section contains the caret, or null. */
   currentHeading: number | null;
   wordCount: number;
+  /** Words in the current selection, 0 when the selection is empty. */
+  selectionWords: number;
   expandedDirs: Record<string, boolean>;
-  error: string | null;
+  toasts: Toast[];
+  confirmRequest: ConfirmRequest | null;
   editor: EditorView | null;
   renaming: string | null;
+  history: string[];
+  historyIndex: number;
+  recent: string[];
+  viewStates: Record<string, ViewState>;
+  jump: Jump | null;
+  jumpVersion: number;
 
   init(): Promise<void>;
   openVault(root?: string): Promise<void>;
   closeVault(): void;
   refreshTree(): Promise<void>;
-  openNote(path: string): Promise<void>;
+  openNote(path: string, opts?: { history?: boolean; jump?: Omit<Jump, "path"> }): Promise<void>;
+  goBack(): Promise<void>;
+  goForward(): Promise<void>;
   updateContent(doc: string): void;
   flushSave(): Promise<void>;
-  createNote(dir?: string): Promise<string | null>;
+  /** With a name, the note is created under that name; without one it starts as "Untitled" in rename mode. */
+  createNote(dir?: string, name?: string): Promise<string | null>;
+  createFolder(dir?: string): Promise<string | null>;
   renamePath(path: string, newName: string): Promise<void>;
+  movePath(from: string, toDir: string): Promise<void>;
   deletePath(path: string): Promise<void>;
+  revealPath(path: string): Promise<void>;
+  copyPath(path: string): Promise<void>;
   reloadFromDisk(): Promise<void>;
   keepLocal(): void;
   setTheme(theme: ThemePref): void;
   cycleTheme(): void;
   toggleSidebar(): void;
   toggleOutline(): void;
+  setSidebarWidth(width: number): void;
+  setFontSize(size: number): void;
+  bumpFontSize(delta: number): void;
+  setLineWidth(width: LineWidth): void;
+  setFontFamily(family: FontFamily): void;
+  setFocusMode(on: boolean): void;
+  setTypewriter(on: boolean): void;
+  openPalette(seed?: string): void;
+  closePalette(): void;
+  /** Kept for the existing keyboard shortcut and tests. */
   setQuickOpen(open: boolean): void;
+  setSettingsOpen(open: boolean): void;
   setHeadings(headings: Heading[]): void;
   setCaret(head: number): void;
   setWordCount(count: number): void;
+  setSelectionWords(count: number): void;
   toggleDir(path: string): void;
   setEditor(view: EditorView | null): void;
   setRenaming(path: string | null): void;
-  clearError(): void;
+  saveViewState(path: string, state: ViewState): void;
+  pushToast(message: string, kind?: Toast["kind"]): number;
+  dismissToast(id: number): void;
+  askConfirm(request: ConfirmRequest): Promise<boolean>;
+  resolveConfirm(ok: boolean): void;
 }
 
 // Save scheduling lives outside the store so it never triggers renders.
@@ -113,8 +228,12 @@ let savedDoc: string | null = null;
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
 let unwatch: (() => void) | null = null;
 let treeRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+let toastSeq = 0;
+let confirmResolver: ((ok: boolean) => void) | null = null;
 
 export const SAVE_DELAY_MS = 500;
+export const TOAST_MS = { info: 3500, error: 7000 } as const;
+export const TOAST_EXIT_MS = 200;
 
 export const useStore = create<AppState>((set, get) => {
   const settings = loadSettings();
@@ -128,7 +247,19 @@ export const useStore = create<AppState>((set, get) => {
       sidebarOpen: s.sidebarOpen,
       outlineOpen: s.outlineOpen,
       expandedDirs: s.expandedDirs,
+      sidebarWidth: s.sidebarWidth,
+      fontSize: s.fontSize,
+      lineWidth: s.lineWidth,
+      fontFamily: s.fontFamily,
+      focusMode: s.focusMode,
+      typewriter: s.typewriter,
+      recent: s.recent,
+      viewStates: s.viewStates,
     });
+  };
+
+  const fail = (message: string, e: unknown) => {
+    get().pushToast(`${message}: ${e instanceof Error ? e.message : String(e)}`, "error");
   };
 
   const scheduleTreeRefresh = () => {
@@ -152,6 +283,94 @@ export const useStore = create<AppState>((set, get) => {
     }
   };
 
+  /** A file or folder moved: rewrite every remembered path that pointed into it. */
+  const remapPaths = (from: string, to: string) => {
+    set((s) => {
+      const viewStates: Record<string, ViewState> = {};
+      for (const [p, v] of Object.entries(s.viewStates)) viewStates[remap(p, from, to)] = v;
+      const expandedDirs: Record<string, boolean> = {};
+      for (const [p, v] of Object.entries(s.expandedDirs)) expandedDirs[remap(p, from, to)] = v;
+      return {
+        activePath: s.activePath ? remap(s.activePath, from, to) : null,
+        history: s.history.map((p) => remap(p, from, to)),
+        recent: s.recent.map((p) => remap(p, from, to)),
+        viewStates,
+        expandedDirs,
+        jump: s.jump ? { ...s.jump, path: remap(s.jump.path, from, to) } : null,
+      };
+    });
+    persist();
+  };
+
+  /** A file or folder was deleted: forget it everywhere. */
+  const forgetPaths = (path: string) => {
+    set((s) => {
+      const keep = (p: string) => !isWithin(p, path);
+      const history: string[] = [];
+      let historyIndex = s.historyIndex;
+      s.history.forEach((p, i) => {
+        if (keep(p)) history.push(p);
+        else if (i <= s.historyIndex) historyIndex--;
+      });
+      // Collapse neighbours that became duplicates.
+      const deduped: string[] = [];
+      history.forEach((p, i) => {
+        if (deduped[deduped.length - 1] === p) {
+          if (i <= historyIndex) historyIndex--;
+        } else deduped.push(p);
+      });
+      const viewStates = Object.fromEntries(Object.entries(s.viewStates).filter(([p]) => keep(p)));
+      return {
+        history: deduped,
+        historyIndex: clamp(historyIndex, deduped.length ? 0 : -1, deduped.length - 1),
+        recent: s.recent.filter(keep),
+        viewStates,
+      };
+    });
+    persist();
+  };
+
+  const loadNote = async (path: string) => {
+    const backend = get().backend;
+    if (!backend) return false;
+    await get().flushSave();
+    try {
+      const content = await backend.readNote(path);
+      latestDoc = content;
+      savedDoc = content;
+      set((s) => ({
+        activePath: path,
+        content,
+        contentVersion: s.contentVersion + 1,
+        dirty: false,
+        externalChange: false,
+        saveState: "idle",
+        renaming: s.renaming === path ? path : null,
+        selectionWords: 0,
+        recent: [path, ...s.recent.filter((p) => p !== path)].slice(0, RECENT_MAX),
+      }));
+      persist();
+      return true;
+    } catch (e) {
+      fail(`Could not open ${stripExtension(basename(path))}`, e);
+      return false;
+    }
+  };
+
+  const navigateHistory = async (delta: -1 | 1) => {
+    const { history, historyIndex } = get();
+    let i = historyIndex + delta;
+    while (i >= 0 && i < history.length) {
+      const path = history[i];
+      if (flattenFiles(get().tree).some((f) => f.path === path)) {
+        set({ historyIndex: i });
+        if (path !== get().activePath) await loadNote(path);
+        return;
+      }
+      i += delta;
+    }
+  };
+
   return {
     backend: null,
     ready: false,
@@ -166,14 +385,31 @@ export const useStore = create<AppState>((set, get) => {
     theme: settings.theme,
     sidebarOpen: settings.sidebarOpen,
     outlineOpen: settings.outlineOpen,
-    quickOpen: false,
+    sidebarWidth: clamp(settings.sidebarWidth, SIDEBAR_WIDTH_MIN, SIDEBAR_WIDTH_MAX),
+    fontSize: clamp(settings.fontSize, FONT_SIZE_MIN, FONT_SIZE_MAX),
+    lineWidth: settings.lineWidth,
+    fontFamily: settings.fontFamily,
+    focusMode: settings.focusMode,
+    typewriter: settings.typewriter,
+    paletteOpen: false,
+    paletteSeed: "",
+    paletteVersion: 0,
+    settingsOpen: false,
     headings: [],
     currentHeading: null,
     wordCount: 0,
+    selectionWords: 0,
     expandedDirs: settings.expandedDirs,
-    error: null,
+    toasts: [],
+    confirmRequest: null,
     editor: null,
     renaming: null,
+    history: [],
+    historyIndex: -1,
+    recent: settings.recent,
+    viewStates: settings.viewStates,
+    jump: null,
+    jumpVersion: 0,
 
     async init() {
       const backend = await getBackend();
@@ -184,13 +420,19 @@ export const useStore = create<AppState>((set, get) => {
         try {
           await get().openVault(settings.vaultRoot);
         } catch (e) {
-          set({ error: `Could not open the last vault: ${String(e)}` });
+          fail("Could not open the last vault", e);
         }
       }
       const { tree, activePath } = get();
       const files = flattenFiles(tree);
+      // Drop remembered paths that no longer exist.
+      const exists = new Set(files.map((f) => f.path));
+      set((s) => ({
+        recent: s.recent.filter((p) => exists.has(p)),
+        viewStates: Object.fromEntries(Object.entries(s.viewStates).filter(([p]) => exists.has(p))),
+      }));
       const preferred = settings.lastNote ?? (backend.kind === "memory" ? files.find((f) => /Editor design notes/.test(f.name))?.path : null);
-      if (!activePath && preferred && files.some((f) => f.path === preferred)) {
+      if (!activePath && preferred && exists.has(preferred)) {
         await get().openNote(preferred);
       } else if (!activePath && files.length) {
         await get().openNote(files[0].path);
@@ -210,7 +452,21 @@ export const useStore = create<AppState>((set, get) => {
       // Expand top-level folders by default.
       const expandedDirs = { ...get().expandedDirs };
       for (const n of tree) if (n.kind === "dir" && expandedDirs[n.path] === undefined) expandedDirs[n.path] = true;
-      set({ vaultRoot: chosen, tree, expandedDirs, activePath: null, content: null, dirty: false, externalChange: false, headings: [], wordCount: 0 });
+      const switching = get().vaultRoot !== null && get().vaultRoot !== chosen;
+      set({
+        vaultRoot: chosen,
+        tree,
+        expandedDirs,
+        activePath: null,
+        content: null,
+        dirty: false,
+        externalChange: false,
+        headings: [],
+        wordCount: 0,
+        history: [],
+        historyIndex: -1,
+        ...(switching ? { recent: [], viewStates: {} } : {}),
+      });
       try {
         unwatch = await backend.watch(chosen, onWatchEvent);
       } catch (e) {
@@ -222,7 +478,7 @@ export const useStore = create<AppState>((set, get) => {
     closeVault() {
       unwatch?.();
       unwatch = null;
-      set({ vaultRoot: null, tree: [], activePath: null, content: null, dirty: false, headings: [], wordCount: 0 });
+      set({ vaultRoot: null, tree: [], activePath: null, content: null, dirty: false, headings: [], wordCount: 0, history: [], historyIndex: -1 });
       persist();
     },
 
@@ -233,24 +489,38 @@ export const useStore = create<AppState>((set, get) => {
         const tree = await backend.listTree(vaultRoot);
         set({ tree });
       } catch (e) {
-        set({ error: `Could not read the vault: ${String(e)}` });
+        fail("Could not read the vault", e);
       }
     },
 
-    async openNote(path) {
+    async openNote(path, opts = {}) {
       const { backend, activePath } = get();
       if (!backend) return;
-      if (path === activePath) return;
-      await get().flushSave();
-      try {
-        const content = await backend.readNote(path);
-        latestDoc = content;
-        savedDoc = content;
-        set((s) => ({ activePath: path, content, contentVersion: s.contentVersion + 1, dirty: false, externalChange: false, saveState: "idle", renaming: null }));
-        persist();
-      } catch (e) {
-        set({ error: `Could not open ${basename(path)}: ${String(e)}` });
+      const jump = opts.jump ? { ...opts.jump, path } : null;
+      if (path === activePath) {
+        if (jump) set((s) => ({ jump, jumpVersion: s.jumpVersion + 1 }));
+        return;
       }
+      if (jump) set({ jump });
+      const ok = await loadNote(path);
+      if (!ok) {
+        if (jump) set({ jump: null });
+        return;
+      }
+      if (opts.history !== false) {
+        set((s) => {
+          const history = [...s.history.slice(0, s.historyIndex + 1), path].slice(-HISTORY_MAX);
+          return { history, historyIndex: history.length - 1 };
+        });
+      }
+    },
+
+    goBack() {
+      return navigateHistory(-1);
+    },
+
+    goForward() {
+      return navigateHistory(1);
     },
 
     updateContent(doc) {
@@ -279,22 +549,40 @@ export const useStore = create<AppState>((set, get) => {
         savedDoc = doc;
         set({ saveState: "saved", dirty: latestDoc !== savedDoc, content: doc });
       } catch (e) {
-        set({ saveState: "error", error: `Could not save ${basename(activePath)}: ${String(e)}` });
+        set({ saveState: "error" });
+        fail(`Could not save ${stripExtension(basename(activePath))}`, e);
       }
     },
 
-    async createNote(dir) {
+    async createNote(dir, name) {
       const { backend, vaultRoot } = get();
       if (!backend || !vaultRoot) return null;
       try {
-        const path = await backend.createNote(dir ?? vaultRoot, "Untitled");
+        const clean = name?.trim().replace(/[\\/]/g, "-");
+        const path = await backend.createNote(dir ?? vaultRoot, clean || "Untitled");
         await get().refreshTree();
         if (dir) set((s) => ({ expandedDirs: { ...s.expandedDirs, [dir]: true } }));
         await get().openNote(path);
-        set({ renaming: path });
+        if (!clean) set({ renaming: path });
         return path;
       } catch (e) {
-        set({ error: `Could not create a note: ${String(e)}` });
+        fail("Could not create a note", e);
+        return null;
+      }
+    },
+
+    async createFolder(dir) {
+      const { backend, vaultRoot } = get();
+      if (!backend || !vaultRoot) return null;
+      try {
+        const parent = dir ?? vaultRoot;
+        const path = await backend.createFolder(parent, "New folder");
+        await get().refreshTree();
+        set((s) => ({ expandedDirs: { ...s.expandedDirs, [parent]: true, [path]: true }, renaming: path }));
+        persist();
+        return path;
+      } catch (e) {
+        fail("Could not create a folder", e);
         return null;
       }
     },
@@ -307,7 +595,7 @@ export const useStore = create<AppState>((set, get) => {
         set({ renaming: null });
         return;
       }
-      const isFile = /\.md$/i.test(basename(path)) || !get().tree.length;
+      const isFile = /\.(md|markdown)$/i.test(basename(path));
       const finalName = isFile && !/\.(md|markdown)$/i.test(clean) ? `${clean}.md` : clean;
       const to = joinPath(dirname(path), finalName);
       if (to === path) {
@@ -315,37 +603,83 @@ export const useStore = create<AppState>((set, get) => {
         return;
       }
       try {
-        if (activePath === path) await get().flushSave();
+        if (activePath && isWithin(activePath, path)) await get().flushSave();
         await backend.renamePath(path, to);
+        remapPaths(path, to);
         await get().refreshTree();
-        if (activePath === path) {
-          set({ activePath: to });
-          persist();
-        } else if (activePath && activePath.startsWith(path + "/")) {
-          set({ activePath: joinPath(to, activePath.slice(path.length + 1)) });
-        }
         set({ renaming: null });
       } catch (e) {
-        set({ error: `Could not rename: ${String(e)}`, renaming: null });
+        set({ renaming: null });
+        fail("Could not rename", e);
+      }
+    },
+
+    async movePath(from, toDir) {
+      const { backend, activePath } = get();
+      if (!backend) return;
+      const to = joinPath(toDir, basename(from));
+      if (to === from || dirname(from) === toDir) return;
+      if (isWithin(toDir, from)) {
+        get().pushToast("A folder can't be moved into itself.", "error");
+        return;
+      }
+      try {
+        if (activePath && isWithin(activePath, from)) await get().flushSave();
+        await backend.renamePath(from, to);
+        remapPaths(from, to);
+        set((s) => ({ expandedDirs: { ...s.expandedDirs, [toDir]: true } }));
+        await get().refreshTree();
+        persist();
+      } catch (e) {
+        fail(`Could not move ${stripExtension(basename(from))}`, e);
       }
     },
 
     async deletePath(path) {
       const { backend, activePath } = get();
       if (!backend) return;
+      const wasActive = !!activePath && isWithin(activePath, path);
       try {
-        if (activePath === path || (activePath && activePath.startsWith(path + "/"))) {
+        if (wasActive) {
           latestDoc = null;
           savedDoc = null;
           if (saveTimer) clearTimeout(saveTimer);
           saveTimer = null;
-          set({ activePath: null, content: null, dirty: false, headings: [], wordCount: 0 });
+          set({ activePath: null, content: null, dirty: false, headings: [], wordCount: 0, selectionWords: 0 });
         }
         await backend.deletePath(path);
+        forgetPaths(path);
         await get().refreshTree();
+        const name = stripExtension(basename(path));
+        get().pushToast(backend.kind === "tauri" ? `Moved “${name}” to the trash` : `Deleted “${name}”`);
+        if (wasActive) {
+          // Land on the most recent note that still exists.
+          const exists = new Set(flattenFiles(get().tree).map((f) => f.path));
+          const next = get().recent.find((p) => exists.has(p));
+          if (next) await get().openNote(next);
+        }
         persist();
       } catch (e) {
-        set({ error: `Could not delete: ${String(e)}` });
+        fail("Could not delete", e);
+      }
+    },
+
+    async revealPath(path) {
+      const { backend } = get();
+      if (!backend?.revealPath) return;
+      try {
+        await backend.revealPath(path);
+      } catch (e) {
+        fail("Could not show the file", e);
+      }
+    },
+
+    async copyPath(path) {
+      try {
+        await navigator.clipboard.writeText(path);
+        get().pushToast("Copied path");
+      } catch (e) {
+        fail("Could not copy the path", e);
       }
     },
 
@@ -362,7 +696,7 @@ export const useStore = create<AppState>((set, get) => {
         savedDoc = content;
         set((s) => ({ content, contentVersion: s.contentVersion + 1, dirty: false, externalChange: false }));
       } catch (e) {
-        set({ error: `Could not reload ${basename(activePath)}: ${String(e)}` });
+        fail(`Could not reload ${stripExtension(basename(activePath))}`, e);
       }
     },
 
@@ -392,8 +726,55 @@ export const useStore = create<AppState>((set, get) => {
       persist();
     },
 
+    setSidebarWidth(width) {
+      set({ sidebarWidth: clamp(Math.round(width), SIDEBAR_WIDTH_MIN, SIDEBAR_WIDTH_MAX) });
+      persist();
+    },
+
+    setFontSize(size) {
+      set({ fontSize: clamp(Math.round(size), FONT_SIZE_MIN, FONT_SIZE_MAX) });
+      persist();
+    },
+
+    bumpFontSize(delta) {
+      get().setFontSize(get().fontSize + delta);
+    },
+
+    setLineWidth(lineWidth) {
+      set({ lineWidth });
+      persist();
+    },
+
+    setFontFamily(fontFamily) {
+      set({ fontFamily });
+      persist();
+    },
+
+    setFocusMode(focusMode) {
+      set({ focusMode });
+      persist();
+    },
+
+    setTypewriter(typewriter) {
+      set({ typewriter });
+      persist();
+    },
+
+    openPalette(seed = "") {
+      set((s) => ({ paletteOpen: true, paletteSeed: seed, paletteVersion: s.paletteVersion + 1, settingsOpen: false }));
+    },
+
+    closePalette() {
+      set({ paletteOpen: false });
+    },
+
     setQuickOpen(open) {
-      set({ quickOpen: open });
+      if (open) get().openPalette("");
+      else get().closePalette();
+    },
+
+    setSettingsOpen(open) {
+      set({ settingsOpen: open });
     },
 
     setHeadings(headings) {
@@ -412,6 +793,10 @@ export const useStore = create<AppState>((set, get) => {
       if (count !== get().wordCount) set({ wordCount: count });
     },
 
+    setSelectionWords(count) {
+      if (count !== get().selectionWords) set({ selectionWords: count });
+    },
+
     toggleDir(path) {
       set((s) => ({ expandedDirs: { ...s.expandedDirs, [path]: !s.expandedDirs[path] } }));
       persist();
@@ -425,8 +810,44 @@ export const useStore = create<AppState>((set, get) => {
       set({ renaming: path });
     },
 
-    clearError() {
-      set({ error: null });
+    saveViewState(path, state) {
+      set((s) => {
+        const next = { ...s.viewStates };
+        delete next[path];
+        next[path] = state;
+        const keys = Object.keys(next);
+        for (const k of keys.slice(0, Math.max(0, keys.length - VIEW_STATES_MAX))) delete next[k];
+        return { viewStates: next };
+      });
+      persist();
+    },
+
+    pushToast(message, kind = "info") {
+      const id = ++toastSeq;
+      set((s) => ({ toasts: [...s.toasts.filter((t) => t.message !== message), { id, message, kind }].slice(-4) }));
+      setTimeout(() => get().dismissToast(id), TOAST_MS[kind]);
+      return id;
+    },
+
+    dismissToast(id) {
+      if (!get().toasts.some((t) => t.id === id && !t.leaving)) return;
+      set((s) => ({ toasts: s.toasts.map((t) => (t.id === id ? { ...t, leaving: true } : t)) }));
+      setTimeout(() => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })), TOAST_EXIT_MS);
+    },
+
+    askConfirm(request) {
+      confirmResolver?.(false);
+      set({ confirmRequest: request });
+      return new Promise<boolean>((resolve) => {
+        confirmResolver = resolve;
+      });
+    },
+
+    resolveConfirm(ok) {
+      const resolve = confirmResolver;
+      confirmResolver = null;
+      set({ confirmRequest: null });
+      resolve?.(ok);
     },
   };
 });
@@ -440,4 +861,12 @@ export function crumbsFor(vaultRoot: string | null, path: string | null): string
   if (!vaultRoot || !path) return [];
   const rel = path.startsWith(vaultRoot) ? path.slice(vaultRoot.length) : path;
   return rel.split(/[\\/]/).filter(Boolean).map((p, i, arr) => (i === arr.length - 1 ? stripExtension(p) : p));
+}
+
+export function canGoBack(s: Pick<AppState, "historyIndex">): boolean {
+  return s.historyIndex > 0;
+}
+
+export function canGoForward(s: Pick<AppState, "history" | "historyIndex">): boolean {
+  return s.historyIndex >= 0 && s.historyIndex < s.history.length - 1;
 }

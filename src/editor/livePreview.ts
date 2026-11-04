@@ -461,6 +461,9 @@ export function buildDecorations(state: EditorState, focused = state.field(focus
     },
   });
 
+  // Mark the caret's lines so focus mode can dim everything else.
+  for (const l of activeLines) out.push(lineDeco("cm-md-active").range(doc.line(l).from));
+
   return Decoration.set(out, true);
 }
 

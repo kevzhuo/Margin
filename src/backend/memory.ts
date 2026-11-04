@@ -3,8 +3,11 @@ import {
   dirname,
   flattenFiles,
   isMarkdown,
+  isWithin,
   joinPath,
+  SEARCH_LINE_MAX,
   type FileNode,
+  type SearchHit,
   type VaultBackend,
   type WatchEvent,
 } from "./types";
@@ -138,19 +141,21 @@ const DEFAULT_FILES: Record<string, string> = {
 
 interface Persisted {
   files: Record<string, string>;
+  /** Folders that exist even when empty. */
+  dirs?: string[];
 }
 
-function load(): Record<string, string> {
+function load(): Persisted {
   try {
     const raw = globalThis.localStorage?.getItem(STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw) as Persisted;
-      if (parsed && parsed.files && typeof parsed.files === "object") return { ...parsed.files };
+      if (parsed && parsed.files && typeof parsed.files === "object") return { files: { ...parsed.files }, dirs: parsed.dirs ?? [] };
     }
   } catch {
     // ignore storage failures (private mode, quota, etc.)
   }
-  return { ...DEFAULT_FILES };
+  return { files: { ...DEFAULT_FILES }, dirs: [] };
 }
 
 /**
@@ -160,18 +165,32 @@ function load(): Record<string, string> {
 export class MemoryBackend implements VaultBackend {
   readonly kind = "memory" as const;
   private files: Record<string, string>;
+  private dirs: Set<string>;
   private listeners = new Set<(e: WatchEvent) => void>();
 
-  constructor(initial?: Record<string, string>) {
-    this.files = initial ? { ...initial } : load();
+  constructor(initial?: Record<string, string>, initialDirs: string[] = []) {
+    if (initial) {
+      this.files = { ...initial };
+      this.dirs = new Set(initialDirs);
+    } else {
+      const loaded = load();
+      this.files = loaded.files;
+      this.dirs = new Set(loaded.dirs ?? []);
+    }
   }
 
   private persist() {
     try {
-      globalThis.localStorage?.setItem(STORAGE_KEY, JSON.stringify({ files: this.files } satisfies Persisted));
+      globalThis.localStorage?.setItem(STORAGE_KEY, JSON.stringify({ files: this.files, dirs: [...this.dirs] } satisfies Persisted));
     } catch {
       // ignore
     }
+  }
+
+  private dirExists(path: string): boolean {
+    if (this.dirs.has(path)) return true;
+    const prefix = path + "/";
+    return Object.keys(this.files).some((p) => p.startsWith(prefix)) || [...this.dirs].some((d) => d.startsWith(prefix));
   }
 
   private emit(event: WatchEvent) {
@@ -181,6 +200,7 @@ export class MemoryBackend implements VaultBackend {
   /** Test helper: reset to the default demo notes. */
   reset() {
     this.files = { ...DEFAULT_FILES };
+    this.dirs = new Set();
     this.persist();
   }
 
@@ -204,6 +224,9 @@ export class MemoryBackend implements VaultBackend {
       return node.children!;
     };
 
+    for (const dir of this.dirs) {
+      if (dir.startsWith(prefix)) ensureDir(dir);
+    }
     for (const path of Object.keys(this.files)) {
       if (!path.startsWith(prefix) || !isMarkdown(path)) continue;
       ensureDir(dirname(path)).push({ name: basename(path), path, kind: "file" });
@@ -244,14 +267,28 @@ export class MemoryBackend implements VaultBackend {
     return candidate;
   }
 
+  async createFolder(dir: string, name: string): Promise<string> {
+    const base = name.trim().replace(/[\\/]/g, "-") || "New folder";
+    let candidate = joinPath(dir, base);
+    let i = 2;
+    while (this.dirExists(candidate) || this.files[candidate] !== undefined) {
+      candidate = joinPath(dir, `${base} ${i}`);
+      i++;
+    }
+    this.dirs.add(candidate);
+    this.persist();
+    this.emit({ kind: "create", paths: [candidate] });
+    return candidate;
+  }
+
   async renamePath(from: string, to: string): Promise<void> {
+    if (this.files[to] !== undefined || this.dirExists(to)) throw new Error(`Already exists: ${to}`);
+    if (to !== from && isWithin(to, from)) throw new Error("Cannot move a folder into itself");
     if (this.files[from] !== undefined) {
-      if (this.files[to] !== undefined) throw new Error(`Already exists: ${to}`);
       this.files[to] = this.files[from];
       delete this.files[from];
-    } else {
-      // directory rename
-      const prefix = from.endsWith("/") ? from : from + "/";
+    } else if (this.dirExists(from)) {
+      const prefix = from + "/";
       const moved: Record<string, string> = {};
       for (const [p, c] of Object.entries(this.files)) {
         if (p.startsWith(prefix)) {
@@ -260,6 +297,11 @@ export class MemoryBackend implements VaultBackend {
         }
       }
       Object.assign(this.files, moved);
+      const dirs = new Set<string>();
+      for (const d of this.dirs) dirs.add(d === from ? to : d.startsWith(prefix) ? joinPath(to, d.slice(prefix.length)) : d);
+      this.dirs = dirs;
+    } else {
+      throw new Error(`Does not exist: ${from}`);
     }
     this.persist();
     this.emit({ kind: "rename", paths: [from, to] });
@@ -269,11 +311,33 @@ export class MemoryBackend implements VaultBackend {
     if (this.files[path] !== undefined) {
       delete this.files[path];
     } else {
-      const prefix = path.endsWith("/") ? path : path + "/";
+      const prefix = path + "/";
       for (const p of Object.keys(this.files)) if (p.startsWith(prefix)) delete this.files[p];
+      for (const d of [...this.dirs]) if (d === path || d.startsWith(prefix)) this.dirs.delete(d);
     }
     this.persist();
     this.emit({ kind: "remove", paths: [path] });
+  }
+
+  async searchVault(root: string, query: string, limit = 100): Promise<SearchHit[]> {
+    const q = query.trim().toLowerCase();
+    if (!q) return [];
+    const prefix = root.endsWith("/") ? root : root + "/";
+    const hits: SearchHit[] = [];
+    const paths = Object.keys(this.files)
+      .filter((p) => p.startsWith(prefix) && isMarkdown(p))
+      .sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }));
+    for (const path of paths) {
+      let perFile = 0;
+      const lines = this.files[path].split("\n");
+      for (let i = 0; i < lines.length && perFile < 5; i++) {
+        if (!lines[i].toLowerCase().includes(q)) continue;
+        hits.push({ path, line: i + 1, text: lines[i].trim().slice(0, SEARCH_LINE_MAX) });
+        perFile++;
+        if (hits.length >= limit) return hits;
+      }
+    }
+    return hits;
   }
 
   async watch(_root: string, onEvent: (event: WatchEvent) => void): Promise<() => void> {

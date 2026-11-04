@@ -34,6 +34,24 @@
   --font-editor: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Segoe UI", system-ui, sans-serif;
   --font-mono: "SF Mono", "JetBrains Mono", Menlo, Consolas, "Liberation Mono", monospace;
 
+  --font-editor-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Segoe UI", system-ui, sans-serif;
+  --font-editor-serif: ui-serif, "New York", "Iowan Old Style", Charter, Georgia, Cambria, serif;
+  --font-editor-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --editor-font-size: 16px;
+
+  /* Motion. Durations collapse to zero under prefers-reduced-motion. */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in: cubic-bezier(0.55, 0, 1, 0.45);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
+  --dur-instant: 90ms;
+  --dur-fast: 140ms;
+  --dur: 200ms;
+  --dur-slow: 280ms;
+
+  --bg-active: rgba(55, 53, 47, 0.14);
+  --backdrop: rgba(15, 15, 15, 0.22);
+
   --radius-sm: 4px;
   --radius-md: 6px;
   --radius-lg: 10px;
@@ -62,6 +80,8 @@
   --quote-border: rgba(255, 255, 255, 0.22);
   --tl-border: rgba(255, 255, 255, 0.12);
   --shadow: 0 0 0 1px rgba(255, 255, 255, 0.08), 0 3px 6px rgba(0, 0, 0, 0.35), 0 9px 24px rgba(0, 0, 0, 0.45);
+  --bg-active: rgba(255, 255, 255, 0.1);
+  --backdrop: rgba(0, 0, 0, 0.45);
   --danger: #ff6b6b;
 
   --code-keyword: #c678dd;
@@ -72,4 +92,13 @@
   --code-property: #61afef;
   --code-tag: #7ee787;
   --code-invalid: #ff7b72;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-instant: 0ms;
+    --dur-fast: 0ms;
+    --dur: 0ms;
+    --dur-slow: 0ms;
+  }
 }

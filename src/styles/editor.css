@@ -6,7 +6,7 @@
   background: var(--bg);
   color: var(--text);
   font-family: var(--font-editor);
-  font-size: 16px;
+  font-size: var(--editor-font-size);
 }
 .editor-host .cm-editor.cm-focused {
   outline: none;
@@ -27,6 +27,24 @@
 .editor-host .cm-editor .cm-line {
   position: relative;
   padding: 2px 0;
+  transition:
+    opacity var(--dur-slow) var(--ease-out),
+    color var(--dur) var(--ease-out),
+    text-decoration-color var(--dur) var(--ease-out);
+}
+html.typewriter .editor-host .cm-editor .cm-content {
+  padding-top: 40vh;
+}
+
+/* ---------- Focus mode: dim everything but the caret's block ---------- */
+html.focus-mode .editor-host .cm-editor.cm-focused .cm-line,
+html.focus-mode .editor-host .cm-editor.cm-focused .cm-md-table {
+  opacity: 0.28;
+}
+html.focus-mode .editor-host .cm-editor.cm-focused .cm-line.cm-md-active,
+html.focus-mode .editor-host .cm-editor.cm-focused .cm-line.cm-md-fence-active,
+html.focus-mode .editor-host .cm-editor.cm-focused .cm-line.cm-md-table-raw {
+  opacity: 1;
 }
 .editor-host .cm-editor .cm-cursor,
 .editor-host .cm-editor .cm-dropCursor {
@@ -45,6 +63,13 @@
 }
 
 /* ---------- Delimiters ---------- */
+/* Revealed syntax fades in. CodeMirror keeps these nodes while you type
+   inside the element, so the animation plays once per reveal. */
+.cm-md-mark,
+.cm-md-listmark,
+.cm-md-ghost {
+  animation: fade-in var(--dur-fast) var(--ease-out);
+}
 .cm-md-mark,
 .cm-md-mark * {
   color: var(--text-3);
@@ -152,6 +177,7 @@
   text-decoration-color: var(--text-3);
   text-underline-offset: 3px;
   cursor: pointer;
+  transition: text-decoration-color var(--dur-fast) var(--ease-out);
 }
 .cm-md-link:hover {
   text-decoration-color: var(--text);
@@ -195,6 +221,7 @@
   vertical-align: baseline;
 }
 .cm-md-bullet::before {
+  animation: fade-in var(--dur-fast) var(--ease-out);
   content: "";
   position: absolute;
   left: 0.18em;
@@ -241,12 +268,25 @@
   border-radius: 4px;
   background: var(--bg);
   cursor: pointer;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+}
+.cm-md-checkbox input:hover {
+  border-color: var(--text-2);
+}
+.cm-md-checkbox input:active {
+  transform: scale(0.86);
+  transition-duration: var(--dur-instant);
 }
 .cm-md-checkbox input:checked {
   background: var(--accent);
   border-color: var(--accent);
+  animation: check-pop var(--dur) var(--ease-out);
 }
-.cm-md-checkbox input:checked::after {
+/* The tick is always present and scales in, so toggling animates both ways. */
+.cm-md-checkbox input::after {
   content: "";
   position: absolute;
   left: 4.5px;
@@ -255,10 +295,24 @@
   height: 8px;
   border: solid #fff;
   border-width: 0 2px 2px 0;
-  transform: rotate(45deg);
+  transform: rotate(45deg) scale(0);
+  opacity: 0;
+  transition:
+    transform var(--dur) var(--ease-spring),
+    opacity var(--dur-fast) var(--ease-out);
 }
-.cm-md-task-done {
+.cm-md-checkbox input:checked::after {
+  transform: rotate(45deg) scale(1);
+  opacity: 1;
+}
+.editor-host .cm-editor .cm-line.cm-md-task {
+  text-decoration-line: line-through;
+  text-decoration-color: transparent;
+  text-decoration-thickness: 1px;
+}
+.editor-host .cm-editor .cm-line.cm-md-task-done {
   color: var(--text-3);
+  text-decoration-color: var(--text-3);
 }
 .cm-md-task-done .cm-md-strong,
 .cm-md-task-done .cm-md-em {
@@ -376,6 +430,8 @@
 
 /* ---------- Slash menu ---------- */
 .cm-tooltip.cm-tooltip-autocomplete.cm-slash-menu {
+  animation: pop-in var(--dur-fast) var(--ease-out);
+  transform-origin: top left;
   background: var(--bg-elevated);
   border: 0;
   border-radius: 8px;
@@ -392,6 +448,7 @@
   min-width: 300px;
 }
 .cm-tooltip.cm-tooltip-autocomplete.cm-slash-menu > ul > li.cm-slash-option {
+  transition: background-color var(--dur-instant) var(--ease-out);
   display: grid;
   grid-template-columns: 34px 1fr;
   grid-template-rows: auto auto;
@@ -443,10 +500,12 @@
 .cm-md-line-placeholder {
   color: var(--text-3);
   pointer-events: none;
+  animation: fade-in var(--dur) var(--ease-out) 60ms both;
 }
 
 /* ---------- Search panel ---------- */
 .editor-host .cm-editor .cm-panels {
+  animation: slide-down var(--dur) var(--ease-out);
   background: var(--bg-sidebar);
   color: var(--text);
   border-bottom: 1px solid var(--border);
@@ -484,6 +543,8 @@
 
 /* ---------- Bubble toolbar ---------- */
 .cm-tooltip.cm-bubble-toolbar {
+  animation: rise-in var(--dur-fast) var(--ease-out);
+  transform-origin: bottom center;
   display: flex;
   align-items: center;
   gap: 2px;
@@ -521,4 +582,15 @@
 .cm-bubble-button i {
   font-style: italic;
   font-family: Georgia, serif;
+}
+.cm-tooltip.cm-bubble-toolbar.no-enter {
+  animation: none;
+}
+.cm-bubble-button {
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+}
+.cm-bubble-button:active {
+  transform: scale(0.92);
 }

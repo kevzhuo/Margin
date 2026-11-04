@@ -40,7 +40,7 @@ test("edits survive a reload", async ({ page }) => {
   await clickLine(lastLine(page));
   await page.keyboard.type("persisted edit");
   await page.waitForTimeout(800);
-  await expect(page.locator(".save-state")).toHaveCount(0);
+  await expect(page.locator(".save-state.visible")).toHaveCount(0);
   await page.reload();
   await page.waitForSelector('.app[data-ready="true"]');
   await expect(page.locator(".crumb.current")).toContainText("Editor design notes");
@@ -52,7 +52,7 @@ test("quick switcher opens a note by name", async ({ page }) => {
   const dialog = page.getByRole("dialog", { name: "Quick switcher" });
   await expect(dialog).toBeVisible();
   await page.keyboard.type("road");
-  await expect(dialog.locator(".quick-item.on .quick-title")).toHaveText("Roadmap");
+  await expect(dialog.locator(".palette-item.on .palette-title")).toHaveText("Roadmap");
   await page.keyboard.press("Enter");
   await expect(dialog).toBeHidden();
   await expect(page.locator(".crumb.current")).toContainText("Roadmap");
@@ -64,13 +64,13 @@ test("quick switcher closes with Escape and the sidebar search button opens it",
   await page.getByRole("button", { name: "Search notes" }).click();
   const dialog = page.getByRole("dialog", { name: "Quick switcher" });
   await expect(dialog).toBeVisible();
-  await expect(dialog.locator(".quick-item")).toHaveCount(8);
+  await expect(dialog.locator(".palette-item")).toHaveCount(8);
   await page.keyboard.press("Escape");
   await expect(dialog).toBeHidden();
 });
 
 test("new note is created, opened and renamed inline", async ({ page }) => {
-  await page.getByRole("button", { name: "New note" }).click();
+  await page.getByRole("button", { name: "New note", exact: true }).click();
   await expect.poll(() => activePath(page)).toMatch(/\/Untitled\.md$/);
   await expect(page.locator(".cm-line.cm-md-h1")).toHaveText("Untitled");
   const input = page.locator(".rename-input");
@@ -95,10 +95,21 @@ test("notes can be renamed and deleted from the context menu", async ({ page }) 
   await expect(page.locator(".tree-row", { hasText: "Shell choice" })).toHaveCount(1);
   await expect(page.locator(".tree-row", { hasText: "Tauri vs Electron" })).toHaveCount(0);
 
-  page.once("dialog", (d) => d.accept());
   await page.locator(".tree-row", { hasText: "Shell choice" }).click({ button: "right" });
   await page.getByRole("menuitem", { name: "Delete note" }).click();
+  // Cancelling keeps the note.
+  const dialog = page.getByRole("alertdialog");
+  await expect(dialog).toContainText("Delete “Shell choice”?");
+  await dialog.getByRole("button", { name: "Cancel" }).click();
+  await expect(dialog).toBeHidden();
+  await expect(page.locator(".tree-row", { hasText: "Shell choice" })).toHaveCount(1);
+  // Confirming deletes it and says so.
+  await page.locator(".tree-row", { hasText: "Shell choice" }).click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Delete note" }).click();
+  await expect(dialog.getByRole("button", { name: "Delete" })).toBeFocused();
+  await page.keyboard.press("Enter");
   await expect(page.locator(".tree-row", { hasText: "Shell choice" })).toHaveCount(0);
+  await expect(page.locator(".toast")).toContainText("Deleted “Shell choice”");
   // Deleting a non-active note leaves the active note alone.
   await expect(page.locator(".crumb.current")).toContainText("Editor design notes");
 });
@@ -108,7 +119,10 @@ test("folders collapse and expand", async ({ page }) => {
   await expect(journal).toHaveAttribute("aria-expanded", "true");
   await journal.click();
   await expect(journal).toHaveAttribute("aria-expanded", "false");
-  await expect(page.locator(".tree-row", { hasText: "2026-11-04" })).toHaveCount(0);
+  // Children stay mounted so they can animate; collapsed ones are hidden.
+  await expect(page.locator(".tree-row", { hasText: "2026-11-04" })).toBeHidden();
+  await expect(journal.locator(".tree-chevron")).not.toHaveClass(/open/);
   await journal.click();
-  await expect(page.locator(".tree-row", { hasText: "2026-11-04" })).toHaveCount(1);
+  await expect(page.locator(".tree-row", { hasText: "2026-11-04" })).toBeVisible();
+  await expect(journal.locator(".tree-chevron")).toHaveClass(/open/);
 });
