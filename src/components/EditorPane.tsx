@@ -39,10 +39,8 @@ export function EditorPane() {
       onUpdate: (update) => {
         if (update.docChanged || update.viewportChanged) {
           useStore.getState().setHeadings(extractHeadings(update.state));
-        } else if (update.selectionSet) {
-          // Re-render outline highlight on caret moves.
-          useStore.setState({});
         }
+        if (update.selectionSet) useStore.getState().setCaret(update.state.selection.main.head);
       },
       onOpenLink: (href) => {
         void useStore.getState().backend?.openExternal(href);
@@ -77,7 +75,7 @@ export function EditorPane() {
         },
         onUpdate: (update) => {
           if (update.docChanged || update.viewportChanged) useStore.getState().setHeadings(extractHeadings(update.state));
-          else if (update.selectionSet) useStore.setState({});
+          if (update.selectionSet) useStore.getState().setCaret(update.state.selection.main.head);
         },
         onOpenLink: (href) => void useStore.getState().backend?.openExternal(href),
       }),

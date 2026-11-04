@@ -5,12 +5,7 @@ export function OutlinePanel() {
   const headings = useStore((s) => s.headings);
   const editor = useStore((s) => s.editor);
   const activePath = useStore((s) => s.activePath);
-
-  const head = editor?.state.selection.main.head ?? 0;
-  let currentIndex = -1;
-  headings.forEach((h, i) => {
-    if (h.pos <= head) currentIndex = i;
-  });
+  const currentHeading = useStore((s) => s.currentHeading);
 
   return (
     <aside className="outline" aria-label="Outline">
@@ -21,7 +16,7 @@ export function OutlinePanel() {
         headings.map((h, i) => (
           <button
             key={`${h.pos}-${i}`}
-            className={`outline-item level-${Math.min(h.level, 4)}${i === currentIndex ? " on" : ""}`}
+            className={`outline-item level-${Math.min(h.level, 4)}${h.pos === currentHeading ? " on" : ""}`}
             onClick={() => editor && selectAt(editor, h.pos)}
             title={h.text}
           >

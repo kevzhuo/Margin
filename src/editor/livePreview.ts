@@ -14,7 +14,7 @@
  *     revealed, so the text never shifts
  *   - bullet markers and their revealed `-` share one fixed-width box
  */
-import { Decoration, EditorView, type DecorationSet } from "@codemirror/view";
+import { Decoration, EditorView, ViewPlugin, type DecorationSet, type ViewUpdate } from "@codemirror/view";
 import { EditorState, Facet, StateEffect, StateField, type Extension, type Range, type Text } from "@codemirror/state";
 import { ensureSyntaxTree, syntaxTree } from "@codemirror/language";
 import type { SyntaxNode, SyntaxNodeRef, Tree } from "@lezer/common";
@@ -55,6 +55,39 @@ export const focusedField = StateField.define<boolean>({
 });
 
 const focusTracker = EditorView.focusChangeEffect.of((_state, focusing) => setFocused.of(focusing));
+
+/**
+ * CodeMirror reports focus changes on a short timer, and a "focus lost" effect
+ * queued during a dispatch can land after `view.focus()` has already run
+ * (select-then-focus flows such as the outline panel). When that happens the
+ * field says "unfocused" while the editor has focus, and CodeMirror sees no
+ * further change to report. This plugin re-syncs the field after updates.
+ */
+const focusReconciler = ViewPlugin.fromClass(
+  class {
+    private timer: ReturnType<typeof setTimeout> | null = null;
+    private dead = false;
+    constructor(readonly view: EditorView) {}
+    update(update: ViewUpdate) {
+      if (update.state.field(focusedField, false) !== update.view.hasFocus) this.schedule();
+    }
+    schedule() {
+      if (this.timer) return;
+      this.timer = setTimeout(() => {
+        this.timer = null;
+        if (this.dead) return;
+        const field = this.view.state.field(focusedField, false);
+        if (field !== undefined && field !== this.view.hasFocus) {
+          this.view.dispatch({ effects: setFocused.of(this.view.hasFocus) });
+        }
+      }, 20);
+    }
+    destroy() {
+      this.dead = true;
+      if (this.timer) clearTimeout(this.timer);
+    }
+  },
+);
 
 // ---------------------------------------------------------------------------
 
@@ -460,5 +493,5 @@ export function linkHrefAt(target: EventTarget | null): string | null {
 }
 
 export function livePreview(options: LivePreviewOptions = {}): Extension {
-  return [livePreviewConfig.of(options), focusedField, focusTracker, livePreviewField];
+  return [livePreviewConfig.of(options), focusedField, focusTracker, focusReconciler, livePreviewField];
 }

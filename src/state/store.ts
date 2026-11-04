@@ -73,6 +73,8 @@ export interface AppState {
   outlineOpen: boolean;
   quickOpen: boolean;
   headings: Heading[];
+  /** Position of the heading whose section contains the caret, or null. */
+  currentHeading: number | null;
   wordCount: number;
   expandedDirs: Record<string, boolean>;
   error: string | null;
@@ -97,6 +99,7 @@ export interface AppState {
   toggleOutline(): void;
   setQuickOpen(open: boolean): void;
   setHeadings(headings: Heading[]): void;
+  setCaret(head: number): void;
   setWordCount(count: number): void;
   toggleDir(path: string): void;
   setEditor(view: EditorView | null): void;
@@ -165,6 +168,7 @@ export const useStore = create<AppState>((set, get) => {
     outlineOpen: settings.outlineOpen,
     quickOpen: false,
     headings: [],
+    currentHeading: null,
     wordCount: 0,
     expandedDirs: settings.expandedDirs,
     error: null,
@@ -394,6 +398,14 @@ export const useStore = create<AppState>((set, get) => {
 
     setHeadings(headings) {
       set({ headings });
+      const head = get().editor?.state.selection.main.head;
+      if (head !== undefined) get().setCaret(head);
+    },
+
+    setCaret(head) {
+      let current: number | null = null;
+      for (const h of get().headings) if (h.pos <= head) current = h.pos;
+      if (current !== get().currentHeading) set({ currentHeading: current });
     },
 
     setWordCount(count) {
