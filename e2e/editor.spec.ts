@@ -123,7 +123,7 @@ test("rendered links open on click, revealed links do not", async ({ page }) => 
   const link = page.locator(".cm-md-link").first();
   await expect(link).toHaveText("the research notes");
   await link.click();
-  await expect.poll(opened).toEqual(["https://github.com/kevzhuo/margin"]);
+  await expect.poll(opened).toEqual(["https://github.com/kevzhuo/Nota/blob/main/docs/research.md"]);
 
   // Put the caret inside the link with the keyboard so the syntax is revealed.
   const quote = lineWithText(page, "A good tool");
@@ -134,7 +134,7 @@ test("rendered links open on click, revealed links do not", async ({ page }) => 
   await expect(quote.locator(".cm-md-mark", { hasText: "[" })).toHaveCount(1);
   await page.locator(".cm-md-link").first().click();
   await page.waitForTimeout(100);
-  expect(await opened()).toEqual(["https://github.com/kevzhuo/margin"]);
+  expect(await opened()).toEqual(["https://github.com/kevzhuo/Nota/blob/main/docs/research.md"]);
 });
 
 test("tables render as a widget and open for editing on click", async ({ page }) => {

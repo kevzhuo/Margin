@@ -285,7 +285,7 @@ The editor should feel like **Typora**: one pane, no preview toggle, and the *sy
 - [x] Pick the editor engine (CodeMirror 6 and Lezer)
 - [ ] Decide how a table is edited while the caret is inside it
 
-> A good tool is one you forget you are using. See [the research notes](https://github.com/kevzhuo/margin).
+> A good tool is one you forget you are using. See [the research notes](https://github.com/kevzhuo/Nota/blob/main/docs/research.md).
 
 \`\`\`ts
 const HIDE = new Set(["HeaderMark", "EmphasisMark"]);

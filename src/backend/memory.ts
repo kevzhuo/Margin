@@ -28,7 +28,7 @@ The editor should feel like **Typora**: one pane, no preview toggle, and the *sy
 - [ ] Decide how a table is edited while the caret is inside it
 - [ ] Test IME composition on WKWebView before committing to Tauri
 
-> A good tool is one you forget you are using. The comparison of engines lives in [the research notes](https://github.com/kevzhuo/margin).
+> A good tool is one you forget you are using. The comparison of engines lives in [the research notes](https://github.com/kevzhuo/Nota/blob/main/docs/research.md).
 
 ## Decoration plan
 
