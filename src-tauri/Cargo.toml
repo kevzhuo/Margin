@@ -15,19 +15,16 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 # `protocol-asset` serves vault images to the webview (app.security.assetProtocol).
-tauri = { version = "2", features = ["protocol-asset"] }
+# `macos-private-api` backs the transparent window and sidebar vibrancy on macOS;
+# it is inert elsewhere. tauri-build requires these features to match
+# tauri.conf.json, and it only reads this entry, so both live here.
+tauri = { version = "2", features = ["protocol-asset", "macos-private-api"] }
 tauri-plugin-dialog = "2"
 tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 notify = "8"
 trash = "5"
-
-# Transparent window + vibrancy need the private API; tauri.macos.conf.json sets
-# `macOSPrivateApi`, so the feature must be enabled on macOS only. Cargo merges
-# this with the entry above.
-[target.'cfg(target_os = "macos")'.dependencies]
-tauri = { version = "2", features = ["protocol-asset", "macos-private-api"] }
 
 [dev-dependencies]
 tempfile = "3"

@@ -9,10 +9,14 @@ test("bubble toolbar appears over a selection and Bold wraps it", async ({ page 
   await clickLine(line, 200);
   await expect(page.locator(".cm-bubble-toolbar")).toHaveCount(0);
 
-  // Select the word "page" at the end of the paragraph with the keyboard.
-  await page.keyboard.press("End");
-  await page.keyboard.press("ArrowLeft");
-  for (let i = 0; i < 4; i++) await page.keyboard.press("Shift+ArrowLeft");
+  // Select the word "page" at the end of the paragraph. Set it directly:
+  // where End lands depends on how the paragraph wraps with the system fonts.
+  await page.evaluate(() => {
+    const view = window.__margin!.store.getState().editor!;
+    const from = view.state.doc.toString().indexOf("finished page.") + "finished ".length;
+    view.dispatch({ selection: { anchor: from + 4, head: from } });
+    view.focus();
+  });
   const selected = await page.evaluate(() => {
     const s = window.__margin!.store.getState().editor!.state;
     return s.sliceDoc(s.selection.main.from, s.selection.main.to);
