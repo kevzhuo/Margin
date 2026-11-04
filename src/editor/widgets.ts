@@ -216,3 +216,23 @@ export class TableWidget extends WidgetType {
     return 32 * (this.data.rows.length + 1) + 12;
   }
 }
+
+/** "Type / for commands" hint on the empty line the caret is on. */
+export class LinePlaceholderWidget extends WidgetType {
+  constructor(readonly text: string) {
+    super();
+  }
+  eq(other: LinePlaceholderWidget) {
+    return other.text === this.text;
+  }
+  toDOM() {
+    const span = document.createElement("span");
+    span.className = "cm-md-line-placeholder";
+    span.textContent = this.text;
+    span.setAttribute("aria-hidden", "true");
+    return span;
+  }
+  ignoreEvent() {
+    return false;
+  }
+}

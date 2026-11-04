@@ -25,6 +25,7 @@ import {
   HrWidget,
   ImageWidget,
   LangLabelWidget,
+  LinePlaceholderWidget,
   TableWidget,
   type TableCell,
   type TableData,
@@ -152,6 +153,14 @@ export function buildDecorations(state: EditorState, focused = state.field(focus
   const tree: Tree = ensureSyntaxTree(state, doc.length, 150) ?? syntaxTree(state);
   const out: Range<Decoration>[] = [];
   let skipUntil = -1;
+
+  // Hint on an empty line that holds the (single, empty) cursor.
+  if (focused && ranges.length === 1 && ranges[0].empty && doc.length > 0) {
+    const line = doc.lineAt(ranges[0].from);
+    if (line.length === 0) {
+      out.push(Decoration.widget({ widget: new LinePlaceholderWidget("Type / for commands"), side: 1 }).range(line.from));
+    }
+  }
 
   const fm = frontMatterRange(doc);
   if (fm) {
