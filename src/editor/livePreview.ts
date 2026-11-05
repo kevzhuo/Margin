@@ -93,6 +93,9 @@ const focusReconciler = ViewPlugin.fromClass(
 const markDeco = (cls: string) => Decoration.mark({ class: cls });
 const hide = Decoration.replace({});
 const dim = markDeco("cm-md-mark");
+/** Revealed link syntax, which wraps with the text instead of staying on one line. */
+const linkDim = markDeco("cm-md-mark cm-md-link-syntax");
+const urlDim = markDeco("cm-md-mark cm-md-link-syntax cm-md-url");
 const marginMark = markDeco("cm-md-mark cm-md-margin-mark");
 const lineDeco = (cls: string) => Decoration.line({ class: cls });
 
@@ -345,7 +348,7 @@ export function buildDecorations(state: EditorState, focused = state.field(focus
           const parent = n.node.parent;
           if (!parent) return;
           if (parent.name === "Link" || parent.name === "Autolink" || parent.name === "Image") {
-            if (touches(parent.from, parent.to)) out.push(dim.range(n.from, n.to));
+            if (touches(parent.from, parent.to)) out.push(linkDim.range(n.from, n.to));
           }
           return;
         }
@@ -353,7 +356,7 @@ export function buildDecorations(state: EditorState, focused = state.field(focus
           const parent = n.node.parent;
           if (!parent) return;
           if (parent.name === "Link" || parent.name === "Autolink" || parent.name === "Image") {
-            if (touches(parent.from, parent.to)) out.push(dim.range(n.from, n.to));
+            if (touches(parent.from, parent.to)) out.push(urlDim.range(n.from, n.to));
           } else {
             // bare URL (GFM autolink)
             const url = doc.sliceString(n.from, n.to);

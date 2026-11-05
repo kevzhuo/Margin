@@ -96,6 +96,15 @@ html.focus-mode .editor-host .cm-editor.cm-focused .cm-line.cm-md-table-raw {
   text-decoration: none;
   white-space: pre;
 }
+/* Revealed link syntax wraps with the text around it, and a long URL breaks
+   wherever it must, so showing a link never pushes text off the page. */
+.cm-md-link-syntax,
+.cm-md-link-syntax * {
+  white-space: inherit;
+}
+.cm-md-url {
+  word-break: break-all;
+}
 .cm-md-margin-mark {
   position: absolute;
   right: 100%;
