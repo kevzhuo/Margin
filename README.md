@@ -17,15 +17,15 @@ database, and nothing moves on screen when you click into a line.
 
 | Area | What works |
 | --- | --- |
-| Live preview | Headings, bold, italic, strikethrough, inline code, links, bare URLs, images, LaTeX math, bullet and numbered lists, task lists with real checkboxes, blockquotes, fenced code with syntax highlighting and a language label, tables (rendered when the caret is outside, raw when inside), horizontal rules, escapes, YAML front matter |
+| Live preview | Headings, bold, italic, strikethrough, inline code, links, bare URLs, images, LaTeX math, bullet and numbered lists, task lists with real checkboxes, blockquotes, fenced code with syntax highlighting and a language label, tables (rendered with bold, code, links and math inside cells when the caret is outside, raw when inside), horizontal rules, escapes, YAML front matter. An image that can't be found shows its file name in a dashed box |
 | Images | Paste a screenshot, drag photos in from Finder or a browser, or type `/image` to pick files. Each image is copied into an `attachments` folder at the top of the vault (never overwriting: a second `photo.png` becomes `photo 2.png`) and linked with a standard relative path, so Typora, Obsidian, VS Code and GitHub show it too. A drop in the middle of a sentence lands on its own line after it. With the caret on an image's link, the picture stays visible underneath |
 | Math | `$…$` inline and `$$…$$` blocks, rendered with KaTeX (bundled, so it works offline). Moving the caret into a formula shows its TeX; blocks show a live preview under the source as you type. A formula with a mistake shows its source in red with the reason. Prices like "$5 and $10" stay text, `\$` is a literal dollar, and an unfinished `$$` never turns the rest of the note into math. `/math`, `Mod+Alt+B` or typing `$` over a selection start one |
-| Writing | Slash menu on an empty line, a formatting toolbar over selected text, typing `*`, `_`, `` ` ``, `~`, `$` or `"` over a selection wraps it, brackets close themselves, pasting a URL over text makes a link, Enter continues lists, find and replace |
+| Writing | Slash menu on an empty line, a formatting toolbar over selected text, typing `*`, `_`, `` ` ``, `~`, `$` or `"` over a selection wraps it, brackets close themselves, pasting a URL over text makes a link, Enter continues lists, and a find and replace bar that floats over the note with a match count and case, whole-word and regex toggles |
 | Focus | Focus mode dims everything but the line you are on; typewriter mode keeps the caret near the middle of the window |
-| Navigation | Command palette, quick switcher with recent notes and full-text search that jumps to and highlights the match, back and forward history (buttons, shortcuts, or a two-finger swipe), caret and scroll position remembered per note, relative links like `[x](Other.md#heading)` open in the app |
+| Navigation | Command palette, quick switcher with recent notes and full-text search (each match shows its note, its section and the line without Markdown syntax) that jumps to and highlights the match, back and forward history (buttons, shortcuts, or a two-finger swipe), caret and scroll position remembered per note, relative links like `[x](Other.md#heading)` open in the app |
 | Titles | A note's first heading is its name: editing it renames the file once you pause, renaming the file updates the heading, and new notes open with the title selected. Notes whose file name was set deliberately are left alone. Can be turned off in Settings |
 | macOS | Native menu bar (File, Edit, View, Go, Format, Window) with standard shortcuts and Format items for math and images, translucent sidebar, inset traffic lights, two-finger swipe for back and forward, quotes that hang into the margin |
-| Vault | Open any folder, file tree with notes and folders (the `attachments` folder stays out of the way until it holds a note), drag and drop to move, rename inline, delete to the trash with a confirmation, copy path, show in Finder, resizable sidebar, autosave with atomic writes, reload when a file changes on disk |
+| Vault | A welcome screen to open a folder, create a vault, or reopen a recent one; file tree with notes and folders (the `attachments` folder stays out of the way until it holds a note), new notes go in the open note's folder, drag and drop to move, rename inline, delete to the trash with a confirmation, copy path, show in Finder, resizable sidebar, autosave with atomic writes, reload when a file changes on disk |
 | Layout | Full width or a centered column with margins (top bar button, Settings, or the palette), gutters that scale with the editor's width, hanging indents for wrapped list items and real nesting, tighter spacing between blocks, tables that wrap or scroll inside their own box, and panels that step aside in small windows and open as overlays instead |
 | Appearance | Light and dark palettes that follow the system, sans, serif or mono text, adjustable text size and line width, an accent caret that fades rather than blinks (optionally gliding), a hairline under the top bar once a note scrolls, slim scrollbars on Windows and Linux, smooth transitions throughout that switch off when the system asks for reduced motion |
 | Window | Opens without a flash in either theme and remembers its size and position |
@@ -167,6 +167,12 @@ widgets (tables, math blocks, image previews).
   so formulas are real syntax-tree nodes: Markdown inside them is never parsed,
   and code spans and fences are never mistaken for math. KaTeX output is cached
   per formula.
+- Syntax colours are plain classes (`src/editor/highlight.ts`) that the
+  stylesheet applies only inside fenced code, so Markdown's own tokens, such
+  as a bare URL or an escaped `\*`, never pick up code colours in prose.
+- Table cells are rendered by `src/editor/inlineMarkdown.ts`, which runs the
+  editor's own parser over each cell; search results use it too, to show
+  matching lines without their Markdown syntax.
 
 ## Images and the vault
 

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DEMO_ROOT, MemoryBackend } from "../backend/memory";
-import type { WatchEvent } from "../backend/types";
+import { flattenFiles, type WatchEvent } from "../backend/types";
 
 const R = DEMO_ROOT;
 const DESIGN = `${R}/Projects/Editor design notes.md`;
@@ -174,11 +174,19 @@ describe("files", () => {
   it("creates a note and opens it with its title selected for typing", async () => {
     const store = await fresh();
     const path = await store.getState().createNote();
-    expect(path).toBe(`${R}/Untitled.md`);
+    // Beside the open note, which is in Projects.
+    expect(path).toBe(`${R}/Projects/Untitled.md`);
     expect(store.getState().activePath).toBe(path);
     expect(store.getState().renaming).toBeNull();
     expect(store.getState().jump).toEqual({ path, line: 1, query: "Untitled", flash: false });
-    expect(store.getState().tree.some((n) => n.name === "Untitled.md")).toBe(true);
+    expect(flattenFiles(store.getState().tree).some((n) => n.path === path)).toBe(true);
+    expect(store.getState().expandedDirs[`${R}/Projects`]).toBe(true);
+  });
+  it("puts a new note at the top level when no note is open, or in a folder it's given", async () => {
+    const store = await fresh();
+    expect(await store.getState().createNote(`${R}/Journal`, "Plan")).toBe(`${R}/Journal/Plan.md`);
+    store.setState({ activePath: null });
+    expect(await store.getState().createNote(undefined, "Loose")).toBe(`${R}/Loose.md`);
   });
   it("creates a note in rename mode when title syncing is off", async () => {
     const store = await fresh();
@@ -350,7 +358,7 @@ describe("folders, moves and deletes", () => {
   it("creates a note with a given name without entering rename mode", async () => {
     const store = await fresh();
     const path = await store.getState().createNote(undefined, "Meeting notes");
-    expect(path).toBe(`${R}/Meeting notes.md`);
+    expect(path).toBe(`${R}/Projects/Meeting notes.md`);
     expect(store.getState().activePath).toBe(path);
     expect(store.getState().renaming).toBeNull();
   });
@@ -453,10 +461,10 @@ describe("title and file name sync", () => {
     const store = await fresh();
     await store.getState().createNote();
     typeTitle(store, "Meeting notes");
-    expect(store.getState().activePath).toBe(`${R}/Untitled.md`);
+    expect(store.getState().activePath).toBe(`${R}/Projects/Untitled.md`);
     await vi.advanceTimersByTimeAsync(mod.TITLE_SYNC_MS);
-    expect(store.getState().activePath).toBe(`${R}/Meeting notes.md`);
-    expect(store.getState().history.at(-1)).toBe(`${R}/Meeting notes.md`);
+    expect(store.getState().activePath).toBe(`${R}/Projects/Meeting notes.md`);
+    expect(store.getState().history.at(-1)).toBe(`${R}/Projects/Meeting notes.md`);
   });
 
   it("follows later title edits while the two stay in sync", async () => {
@@ -544,5 +552,43 @@ describe("images", () => {
     const store = await fresh();
     store.setState({ activePath: null });
     expect(await store.getState().saveImages([png("a.png")])).toEqual([]);
+  });
+});
+
+describe("vaults on the welcome screen", () => {
+  it("remembers opened vaults, most recent first, without repeats", async () => {
+    const store = await fresh();
+    expect(store.getState().recentVaults).toEqual([R]);
+    await store.getState().openVault("/Other");
+    await store.getState().openVault(R);
+    expect(store.getState().recentVaults).toEqual([R, "/Other"]);
+    for (let i = 0; i < 10; i++) await store.getState().openVault(`/V${i}`);
+    expect(store.getState().recentVaults).toHaveLength(mod.RECENT_VAULTS_MAX);
+    expect(store.getState().recentVaults[0]).toBe("/V9");
+  });
+
+  it("creates a vault, opens it and starts its first note", async () => {
+    const store = await fresh();
+    await store.getState().createVault();
+    expect(store.getState().vaultRoot).toBe("/New vault");
+    expect(store.getState().activePath).toBe("/New vault/Untitled.md");
+    expect(store.getState().recentVaults[0]).toBe("/New vault");
+  });
+
+  it("drops a recent vault that can no longer be opened, and says so", async () => {
+    const store = await fresh();
+    await store.getState().openVault("/Gone");
+    await store.getState().openVault(R);
+    vi.spyOn(backend, "listTree").mockRejectedValueOnce(new Error("No such folder"));
+    await store.getState().openRecentVault("/Gone");
+    expect(store.getState().vaultRoot).toBe(R);
+    expect(store.getState().recentVaults).toEqual([R]);
+    expect(store.getState().toasts.at(-1)?.message).toBe("Could not open Gone: No such folder");
+  });
+
+  it("forgets a vault on request", async () => {
+    const store = await fresh();
+    store.getState().forgetVault(R);
+    expect(store.getState().recentVaults).toEqual([]);
   });
 });

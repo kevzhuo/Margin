@@ -9,8 +9,6 @@ export const ATTACHMENTS_DIR = "attachments";
 /** Largest image accepted, in bytes. */
 export const MAX_ATTACHMENT_BYTES = 100 * 1024 * 1024;
 
-export type ImageSource = "paste" | "drop" | "pick";
-
 const EXTENSIONS: Record<string, string> = {
   "image/png": "png",
   "image/jpeg": "jpg",

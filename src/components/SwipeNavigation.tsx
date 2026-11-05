@@ -3,7 +3,7 @@ import { canGoBack, canGoForward, useStore } from "../state/store";
 import { ChevronLeft, ChevronRightLg } from "./icons";
 
 /** Horizontal travel (px) needed to arm a back/forward swipe. */
-export const SWIPE_THRESHOLD = 140;
+const SWIPE_THRESHOLD = 140;
 /** The gesture is over once wheel events stop for this long. */
 const GESTURE_END_MS = 140;
 /** After navigating, ignore the tail of the same gesture's momentum. */

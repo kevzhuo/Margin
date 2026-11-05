@@ -13,6 +13,7 @@
 //! delete_path(path)          -> void       (moves to the system trash)
 //! watch_vault(root)          -> void       (emits "vault://changed")
 //! unwatch_vault()            -> void
+//! create_vault(path)         -> string     (new or empty folder; any location)
 //! save_attachment(bytes)     -> string     (raw body; headers x-dir and x-name,
 //!                                           percent-encoded; new absolute path)
 //! ```
@@ -61,6 +62,23 @@ pub struct SearchHit {
     /// 1-based line number.
     pub line: usize,
     pub text: String,
+    /// The nearest heading above the line, without its `#`s, if any.
+    pub heading: Option<String>,
+}
+
+/// The text of an ATX heading line (`## Title ##` gives `Title`), or None.
+fn heading_text(line: &str) -> Option<&str> {
+    let trimmed = line.trim_start();
+    let hashes = trimmed.chars().take_while(|&c| c == '#').count();
+    if !(1..=6).contains(&hashes) {
+        return None;
+    }
+    let rest = &trimmed[hashes..];
+    if !(rest.is_empty() || rest.starts_with([' ', '\t'])) {
+        return None;
+    }
+    let text = rest.trim().trim_end_matches('#').trim_end();
+    (!text.is_empty()).then_some(text)
 }
 
 /// Longest line text returned in a search hit, in characters.
@@ -362,6 +380,31 @@ pub fn create_note_in(dir: &Path, name: &str) -> Result<PathBuf, String> {
     Ok(candidate)
 }
 
+/// Make the folder for a new vault. The path comes from the save dialog, so
+/// it may be anywhere; an existing folder is accepted only if it is empty.
+pub fn create_vault_at(path: &Path) -> Result<PathBuf, String> {
+    if path.exists() {
+        if !path.is_dir() {
+            return Err("A file with that name already exists".to_string());
+        }
+        let mut entries = fs::read_dir(path).map_err(|e| io_err("Could not read folder", e))?;
+        if entries.next().is_some() {
+            return Err(
+                "That folder already has files in it. Use Open folder to open it as a vault."
+                    .to_string(),
+            );
+        }
+    } else {
+        match path.parent() {
+            Some(parent) if parent.is_dir() => {}
+            _ => return Err(format!("Folder does not exist: {}", path.display())),
+        }
+        fs::create_dir(path).map_err(|e| io_err("Could not create the vault folder", e))?;
+    }
+    path.canonicalize()
+        .map_err(|e| io_err("Could not open the vault folder", e))
+}
+
 /// Folder at the vault root that pasted and dropped images are saved to.
 pub const ATTACHMENTS_DIR: &str = "attachments";
 
@@ -500,15 +543,29 @@ pub fn search_dir(root: &Path, query: &str, limit: usize) -> Result<Vec<SearchHi
             continue;
         };
         let mut per_file = 0;
+        let mut heading: Option<&str> = None;
+        let mut in_fence = false;
         for (i, line) in content.lines().enumerate() {
-            if !line.to_lowercase().contains(&needle) {
+            let matched = line.to_lowercase().contains(&needle);
+            if matched {
+                hits.push(SearchHit {
+                    path: path.clone(),
+                    line: i + 1,
+                    text: line.trim().chars().take(SEARCH_LINE_MAX).collect(),
+                    heading: heading.map(str::to_string),
+                });
+            }
+            let trimmed = line.trim_start();
+            if trimmed.starts_with("```") || trimmed.starts_with("~~~") {
+                in_fence = !in_fence;
+            } else if !in_fence {
+                if let Some(text) = heading_text(line) {
+                    heading = Some(text);
+                }
+            }
+            if !matched {
                 continue;
             }
-            hits.push(SearchHit {
-                path: path.clone(),
-                line: i + 1,
-                text: line.trim().chars().take(SEARCH_LINE_MAX).collect(),
-            });
             if hits.len() >= limit {
                 return Ok(hits);
             }
@@ -814,6 +871,11 @@ pub fn save_attachment(
     }
     let saved = save_attachment_in(&dir, &header(&request, "x-name")?, data)?;
     Ok(display_path(&saved))
+}
+
+#[tauri::command]
+pub fn create_vault(path: String) -> Result<String, String> {
+    Ok(display_path(&create_vault_at(Path::new(&path))?))
 }
 
 #[tauri::command]
@@ -1136,5 +1198,49 @@ mod tests {
         let mut tree = list_tree_at(root).unwrap();
         hide_attachments_folder(&mut tree);
         assert_eq!(names(&tree), vec!["attachments", "Empty", "Note.md"]);
+    }
+
+    #[test]
+    fn search_hits_name_the_heading_above_them() {
+        let tmp = tempdir().unwrap();
+        fs::write(
+            tmp.path().join("n.md"),
+            "# Notes\nintro typora\n## Section **one**\n```\n# not a heading typora\n```\nmore typora\n### Deep ###\ntypora deep\n#hashtag typora",
+        )
+        .unwrap();
+        let hits = search_dir(tmp.path(), "typora", 100).unwrap();
+        let headings: Vec<(usize, Option<&str>)> = hits
+            .iter()
+            .map(|h| (h.line, h.heading.as_deref()))
+            .collect();
+        assert_eq!(
+            headings,
+            vec![
+                (2, Some("Notes")),
+                (5, Some("Section **one**")),
+                (7, Some("Section **one**")),
+                (9, Some("Deep")),
+                // "#hashtag" has no space after the #, so it isn't a heading.
+                (10, Some("Deep")),
+            ]
+        );
+    }
+
+    #[test]
+    fn creates_a_vault_in_a_new_or_empty_folder_only() {
+        let tmp = tempdir().unwrap();
+        let fresh = create_vault_at(&tmp.path().join("Notes")).unwrap();
+        assert!(fresh.is_dir());
+        // An empty folder is fine, so creating it twice is too.
+        assert_eq!(create_vault_at(&tmp.path().join("Notes")).unwrap(), fresh);
+
+        fs::write(fresh.join("a.md"), "x").unwrap();
+        assert!(create_vault_at(&fresh)
+            .unwrap_err()
+            .contains("already has files"));
+        assert!(create_vault_at(&fresh.join("a.md"))
+            .unwrap_err()
+            .contains("file with that name"));
+        assert!(create_vault_at(&tmp.path().join("missing/Notes")).is_err());
     }
 }

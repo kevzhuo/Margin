@@ -314,7 +314,7 @@ The editor should feel like **Typora**: one pane, no preview toggle, and the *sy
 - [x] Pick the editor engine (CodeMirror 6 and Lezer)
 - [ ] Decide how a table is edited while the caret is inside it
 
-> A good tool is one you forget you are using. See [the research notes](https://github.com/kevzhuo/Nota/blob/main/docs/research.md).
+> A good tool is one you forget you are using. See [the research notes](https://github.com/kevzhuo/Margin/blob/main/docs/research.md).
 
 \`\`\`ts
 const HIDE = new Set(["HeaderMark", "EmphasisMark"]);
@@ -461,5 +461,46 @@ describe("image previews", () => {
 
   it("adds no preview when the caret is elsewhere", () => {
     expect(collect(buildBlockDecorations(stateOf(doc, doc.length), true), doc)).toEqual([]);
+  });
+});
+
+describe("table cells", () => {
+  const table = (doc: string) => {
+    const w = collect(buildBlockDecorations(stateOf(doc, doc.length), true), doc).find((x) => x.widget === "TableWidget")!;
+    return (w.widgetObj as { data: { header: { text: string; offset: number }[]; rows: { text: string }[][] } }).data;
+  };
+
+  it("keeps an empty cell in its column", () => {
+    const data = table("|  | Tauri 2 | Electron |\n| - | - | - |\n| Installer | 3 to 10 MB | 85 to 250 MB |\n\nx");
+    expect(data.header.map((c) => c.text)).toEqual(["", "Tauri 2", "Electron"]);
+    expect(data.rows[0].map((c) => c.text)).toEqual(["Installer", "3 to 10 MB", "85 to 250 MB"]);
+  });
+
+  it("keeps empty cells in the middle and at the end", () => {
+    const data = table("| a | b | c |\n| - | - | - |\n| 1 |  | 3 |\n| 4 | 5 |  |\n\nx");
+    expect(data.rows.map((r) => r.map((c) => c.text))).toEqual([
+      ["1", "", "3"],
+      ["4", "5", ""],
+    ]);
+  });
+
+  it("works without outer pipes", () => {
+    const data = table("a | b\n--- | ---\n1 | 2\n\nx");
+    expect(data.header.map((c) => c.text)).toEqual(["a", "b"]);
+    expect(data.rows[0].map((c) => c.text)).toEqual(["1", "2"]);
+  });
+
+  it("fits rows to the header's width", () => {
+    const data = table("| a | b | c |\n| - | - | - |\n| 1 |\n| 1 | 2 | 3 | 4 |\n\nx");
+    expect(data.rows.map((r) => r.map((c) => c.text))).toEqual([
+      ["1", "", ""],
+      ["1", "2", "3"],
+    ]);
+  });
+
+  it("measures cell offsets from the start of the line, also inside a quote", () => {
+    const doc = "> | a | b |\n> | - | - |\n> | 1 | 2 |\n\nx";
+    const data = table(doc);
+    expect(doc.slice(data.header[1].offset, data.header[1].offset + 1)).toBe("b");
   });
 });

@@ -49,7 +49,7 @@ test("returning to a note restores the caret and scroll position", async ({ page
 });
 
 test("full-text search jumps to and selects the match", async ({ page }) => {
-  await page.keyboard.press("Control+Shift+f");
+  await page.keyboard.press("Control+Shift+F");
   const dialog = page.getByRole("dialog", { name: "Quick switcher" });
   await page.keyboard.type("right, make");
   const hit = dialog.locator(".palette-item.kind-hit").first();
@@ -60,6 +60,26 @@ test("full-text search jumps to and selects the match", async ({ page }) => {
   await expect(dialog).toBeHidden();
   await expect.poll(() => activePath(page)).toMatch(/2026-11-03\.md$/);
   await expect.poll(() => selectedText(page)).toBe("right, make");
+});
+
+test("search results name the note and section, and show the line without Markdown", async ({ page }) => {
+  await page.keyboard.press("Control+Shift+F");
+  const dialog = page.getByRole("dialog", { name: "Quick switcher" });
+  await page.keyboard.type("atomic");
+  const hit = dialog.locator(".palette-item.kind-hit").first();
+  await expect(hit.locator(".palette-hit-note")).toHaveText("Roadmap");
+  await expect(hit.locator(".palette-hit-section")).toHaveText("Now");
+  await expect(hit.locator(".palette-snippet")).toHaveText("Autosave with atomic writes");
+  await page.locator(".palette-input").fill("the roadmap");
+  const link = dialog.locator(".palette-item.kind-hit", { hasText: "Inbox" });
+  await expect(link.locator(".palette-snippet")).toHaveText("Next up: the roadmap");
+  await expect(link.locator("mark")).toHaveText("the roadmap");
+  // The note's own title heading isn't repeated as a section.
+  await expect(link.locator(".palette-hit-section")).toHaveCount(0);
+  // Nor is a match on a title line listed again under "In notes".
+  await page.locator(".palette-input").fill("roadmap");
+  await expect(dialog.locator(".palette-item.kind-note", { hasText: "Roadmap" })).toHaveCount(1);
+  await expect(dialog.locator(".palette-item.kind-hit .palette-snippet", { hasText: /^Roadmap$/ })).toHaveCount(0);
 });
 
 test("the palette lists recent notes first and can create a note by name", async ({ page }) => {

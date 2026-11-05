@@ -1,7 +1,6 @@
 import { EditorState, Prec, type Extension } from "@codemirror/state";
 import { EditorView, drawSelection, dropCursor, keymap, placeholder, rectangularSelection, type ViewUpdate } from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
-import { searchKeymap, search } from "@codemirror/search";
 import { markdown, markdownLanguage, markdownKeymap } from "@codemirror/lang-markdown";
 import { mathSyntax } from "./mathSyntax";
 import { languages } from "@codemirror/language-data";
@@ -9,6 +8,7 @@ import { indentUnit } from "@codemirror/language";
 import { closeBrackets, closeBracketsKeymap } from "@codemirror/autocomplete";
 import { livePreview, linkHrefAt, type LivePreviewOptions } from "./livePreview";
 import { codeHighlighting } from "./highlight";
+import { findAndReplace, findKeymap } from "./findPanel";
 import { formattingKeys } from "./commands";
 import { slashMenu } from "./slashMenu";
 import { bubbleToolbar } from "./bubbleToolbar";
@@ -38,7 +38,7 @@ export interface CreateEditorOptions extends EditorCallbacks {
   extraExtensions?: Extension[];
 }
 
-export function editorExtensions(opts: Omit<CreateEditorOptions, "parent" | "doc">): Extension[] {
+function editorExtensions(opts: Omit<CreateEditorOptions, "parent" | "doc">): Extension[] {
   return [
     history(),
     drawSelection(),
@@ -46,7 +46,7 @@ export function editorExtensions(opts: Omit<CreateEditorOptions, "parent" | "doc
     rectangularSelection(),
     EditorView.lineWrapping,
     indentUnit.of("  "),
-    search({ top: true }),
+    findAndReplace,
     markdown({ base: markdownLanguage, codeLanguages: languages, addKeymap: false, extensions: [mathSyntax] }),
     // Auto-close brackets only. Quotes and backticks would fight with prose
     // apostrophes and with typing ``` for a code fence.
@@ -70,7 +70,7 @@ export function editorExtensions(opts: Omit<CreateEditorOptions, "parent" | "doc
       ]),
     ),
     formattingKeys,
-    keymap.of([...closeBracketsKeymap, ...markdownKeymap, ...searchKeymap, indentWithTab, ...historyKeymap, ...defaultKeymap]),
+    keymap.of([...closeBracketsKeymap, ...markdownKeymap, ...findKeymap, indentWithTab, ...historyKeymap, ...defaultKeymap]),
     EditorView.contentAttributes.of({ spellcheck: "true", autocapitalize: "sentences", "aria-label": "Note editor" }),
     EditorView.domEventHandlers({
       mousedown(event, view) {

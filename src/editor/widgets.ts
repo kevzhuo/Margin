@@ -1,5 +1,6 @@
 import { WidgetType, type EditorView } from "@codemirror/view";
 import { syntaxTree } from "@codemirror/language";
+import { renderInline } from "./inlineMarkdown";
 
 /** Replaces a bullet list marker (`-`, `*`, `+`). Same fixed width as the active-state mark. */
 export class BulletWidget extends WidgetType {
@@ -134,7 +135,10 @@ export class HrWidget extends WidgetType {
 
 export class ImageWidget extends WidgetType {
   constructor(
+    /** What the <img> loads (the link resolved to a file or URL). */
     readonly src: string,
+    /** The link as written in the note, named in the placeholder if it fails. */
+    readonly link: string,
     readonly alt: string,
     /** Drawn under the image's source while the caret is on it. */
     readonly preview = false,
@@ -142,7 +146,7 @@ export class ImageWidget extends WidgetType {
     super();
   }
   eq(other: ImageWidget) {
-    return other.src === this.src && other.alt === this.alt && other.preview === this.preview;
+    return other.src === this.src && other.link === this.link && other.alt === this.alt && other.preview === this.preview;
   }
   toDOM() {
     const wrap = document.createElement(this.preview ? "div" : "span");
@@ -151,10 +155,7 @@ export class ImageWidget extends WidgetType {
     img.src = this.src;
     img.alt = this.alt;
     img.draggable = false;
-    img.addEventListener("error", () => {
-      wrap.classList.add("cm-md-image-broken");
-      wrap.textContent = this.alt || this.src;
-    });
+    img.addEventListener("error", () => wrap.replaceChildren(missingImage(this.link, this.alt)), { once: true });
     wrap.appendChild(img);
     return wrap;
   }
@@ -164,9 +165,32 @@ export class ImageWidget extends WidgetType {
   }
 }
 
+/** A placeholder for an image that didn't load, naming the file so a broken link is easy to spot. */
+function missingImage(link: string, alt: string): HTMLElement {
+  const box = document.createElement("span");
+  box.className = "cm-md-image-missing";
+  box.title = link;
+  box.innerHTML =
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+    '<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="1.5"/><path d="M21 16l-5-5-8 8"/><path d="M3 3l18 18"/></svg>';
+  let name = link.split(/[\\/]/).pop() || link;
+  try {
+    name = decodeURIComponent(name);
+  } catch {
+    // keep it as written
+  }
+  const label = document.createElement("span");
+  label.className = "cm-md-image-missing-name";
+  label.textContent = name || alt || "Image";
+  const note = document.createElement("span");
+  note.textContent = /^[a-z][a-z0-9+.-]*:/i.test(link) && !/^[a-z]:[\\/]/i.test(link) ? "Couldn't load" : "Not found";
+  box.append(label, note);
+  return box;
+}
+
 export interface TableCell {
   text: string;
-  /** Offset of the cell content from the start of the table node. */
+  /** Offset of the cell content from the start of the table's first line. */
   offset: number;
   align: "left" | "center" | "right" | null;
 }
@@ -189,7 +213,7 @@ export class TableWidget extends WidgetType {
     wrap.className = "cm-md-table";
     const table = document.createElement("table");
     const place = (cell: HTMLElement, data: TableCell) => {
-      cell.textContent = data.text;
+      cell.append(renderInline(data.text));
       if (data.align) cell.style.textAlign = data.align;
       cell.addEventListener("mousedown", (e) => {
         e.preventDefault();

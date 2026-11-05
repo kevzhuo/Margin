@@ -42,6 +42,12 @@ export const FileText = ({ size = 16, ...p }: IconProps) => (
     <path d="M14 3v5h5" />
   </svg>
 );
+/** Lines of text: a match inside a note. */
+export const TextLines = ({ size = 16, ...p }: IconProps) => (
+  <svg {...base(size, p)} strokeWidth={1.7}>
+    <path d="M4 6h16M4 10h16M4 14h10M4 18h7" />
+  </svg>
+);
 export const Plus = ({ size = 15, ...p }: IconProps) => (
   <svg {...base(size, p)} strokeWidth={2}>
     <path d="M12 5v14M5 12h14" />
@@ -124,11 +130,6 @@ export const FilePlus = ({ size = 16, ...p }: IconProps) => (
 export const Command = ({ size = 16, ...p }: IconProps) => (
   <svg {...base(size, p)}>
     <path d="M9 6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3z" />
-  </svg>
-);
-export const Hash = ({ size = 16, ...p }: IconProps) => (
-  <svg {...base(size, p)}>
-    <path d="M5 9h14M5 15h14M10 4L8 20M16 4l-2 16" />
   </svg>
 );
 export const ArrowsHorizontal = ({ size = 16, ...p }: IconProps) => (

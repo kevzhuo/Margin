@@ -6,7 +6,7 @@ import { EditorView, ViewPlugin } from "@codemirror/view";
  * as its scrollbars. Wide enough for classic bars (about 15px on macOS, 12px
  * elsewhere) and for macOS overlay bars, which take no space.
  */
-export const SCROLLBAR_ZONE = 16;
+const SCROLLBAR_ZONE = 16;
 
 /** Whether a press at (x, y), in client coordinates, is on one of `el`'s scrollbars. */
 export function onScrollbar(el: HTMLElement, x: number, y: number): boolean {

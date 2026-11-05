@@ -7,7 +7,7 @@ export type MathResult = { html: string } | { error: string };
 
 const cache = new Map<string, MathResult>();
 /** Rendered formulas kept for reuse; a long note's math re-renders from here as you scroll and type. */
-export const MATH_CACHE_LIMIT = 500;
+const MATH_CACHE_LIMIT = 500;
 
 /** Render TeX with KaTeX. Results are cached, least recently used dropped first. */
 export function renderMath(tex: string, display: boolean): MathResult {

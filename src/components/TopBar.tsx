@@ -17,6 +17,9 @@ export function TopBar() {
   const goForward = useStore((s) => s.goForward);
   const crumbs = crumbsFor(vaultRoot, activePath);
 
+  // Before a vault is open the bar is only a place to drag the window by.
+  if (!vaultRoot) return <div className="topbar" data-tauri-drag-region="" />;
+
   return (
     <div className="topbar" data-tauri-drag-region="">
       <div className="topbar-nav">

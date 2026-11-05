@@ -90,6 +90,8 @@ interface Settings {
   focusMode: boolean;
   typewriter: boolean;
   recent: string[];
+  /** Vaults opened before, most recent first, offered on the welcome screen. */
+  recentVaults: string[];
   viewStates: Record<string, ViewState>;
 }
 
@@ -110,6 +112,7 @@ const defaultSettings: Settings = {
   focusMode: false,
   typewriter: false,
   recent: [],
+  recentVaults: [],
   viewStates: {},
 };
 
@@ -191,12 +194,18 @@ export interface AppState {
   history: string[];
   historyIndex: number;
   recent: string[];
+  recentVaults: string[];
   viewStates: Record<string, ViewState>;
   jump: Jump | null;
   jumpVersion: number;
 
   init(): Promise<void>;
   openVault(root?: string): Promise<void>;
+  /** Open a vault from the welcome screen's list, dropping it from the list if it's gone. */
+  openRecentVault(root: string): Promise<void>;
+  /** Ask where to make a new vault, open it, and start its first note. */
+  createVault(): Promise<void>;
+  forgetVault(root: string): void;
   closeVault(): void;
   refreshTree(): Promise<void>;
   openNote(path: string, opts?: { history?: boolean; jump?: Omit<Jump, "path"> }): Promise<void>;
@@ -205,6 +214,7 @@ export interface AppState {
   updateContent(doc: string): void;
   flushSave(): Promise<void>;
   /** With a name, the note is created under that name; without one it starts as "Untitled" in rename mode. */
+  /** Create a note in `dir`, or by default in the open note's folder (the vault's top level if none is open). */
   createNote(dir?: string, name?: string): Promise<string | null>;
   createFolder(dir?: string): Promise<string | null>;
   /**
@@ -272,6 +282,8 @@ let titleTimer: ReturnType<typeof setTimeout> | null = null;
 let confirmResolver: ((ok: boolean) => void) | null = null;
 
 export const SAVE_DELAY_MS = 500;
+/** How many vaults the welcome screen remembers. */
+export const RECENT_VAULTS_MAX = 6;
 /** Wait for a pause in typing before renaming a note after its title. */
 export const TITLE_SYNC_MS = 700;
 export const TOAST_MS = { info: 3500, error: 7000 } as const;
@@ -299,6 +311,7 @@ export const useStore = create<AppState>((set, get) => {
       focusMode: s.focusMode,
       typewriter: s.typewriter,
       recent: s.recent,
+      recentVaults: s.recentVaults,
       viewStates: s.viewStates,
     });
   };
@@ -488,6 +501,7 @@ export const useStore = create<AppState>((set, get) => {
     history: [],
     historyIndex: -1,
     recent: settings.recent,
+    recentVaults: settings.recentVaults,
     viewStates: settings.viewStates,
     jump: null,
     jumpVersion: 0,
@@ -550,6 +564,7 @@ export const useStore = create<AppState>((set, get) => {
         wordCount: 0,
         history: [],
         historyIndex: -1,
+        recentVaults: [chosen, ...get().recentVaults.filter((p) => p !== chosen)].slice(0, RECENT_VAULTS_MAX),
         ...(switching ? { recent: [], viewStates: {} } : {}),
       });
       try {
@@ -557,6 +572,33 @@ export const useStore = create<AppState>((set, get) => {
       } catch (e) {
         console.warn("watch failed", e);
       }
+      persist();
+    },
+
+    async openRecentVault(root) {
+      try {
+        await get().openVault(root);
+      } catch (e) {
+        get().forgetVault(root);
+        fail(`Could not open ${basename(root) || root}`, e);
+      }
+    },
+
+    async createVault() {
+      const backend = get().backend;
+      if (!backend) return;
+      try {
+        const root = await backend.createVault();
+        if (!root) return;
+        await get().openVault(root);
+        await get().createNote();
+      } catch (e) {
+        fail("Could not create the vault", e);
+      }
+    },
+
+    forgetVault(root) {
+      set((s) => ({ recentVaults: s.recentVaults.filter((p) => p !== root) }));
       persist();
     },
 
@@ -645,13 +687,15 @@ export const useStore = create<AppState>((set, get) => {
     },
 
     async createNote(dir, name) {
-      const { backend, vaultRoot } = get();
+      const { backend, vaultRoot, activePath } = get();
       if (!backend || !vaultRoot) return null;
+      const openDir = activePath ? dirname(activePath) : null;
+      const target = dir ?? (openDir && isWithin(openDir, vaultRoot) ? openDir : vaultRoot);
       try {
         const clean = name?.trim().replace(/[\\/]/g, "-");
-        const path = await backend.createNote(dir ?? vaultRoot, clean || "Untitled");
+        const path = await backend.createNote(target, clean || "Untitled");
         await get().refreshTree();
-        if (dir) set((s) => ({ expandedDirs: { ...s.expandedDirs, [dir]: true } }));
+        if (target !== vaultRoot) set((s) => ({ expandedDirs: { ...s.expandedDirs, [target]: true } }));
         if (!clean && get().titleSync) {
           // Open with the placeholder title selected: typing names the note.
           await get().openNote(path, { jump: { line: 1, query: stripExtension(basename(path)), flash: false } });
@@ -1071,10 +1115,10 @@ export function outlineVisible(s: Pick<AppState, "outlineOpen" | "outlineFits" |
 }
 
 /** Narrowest editor area that panels may leave before they hide themselves. */
-export const MIN_EDITOR_WIDTH = 560;
+const MIN_EDITOR_WIDTH = 560;
 /** Below this window width the sidebar becomes an overlay. */
-export const SIDEBAR_DOCK_MIN_WINDOW = 640;
-export const OUTLINE_WIDTH = 220;
+const SIDEBAR_DOCK_MIN_WINDOW = 640;
+const OUTLINE_WIDTH = 220;
 
 /** Which panels fit beside the editor at a given window width. */
 export function panelFits(windowWidth: number, sidebarOpen: boolean, sidebarWidth: number): { sidebarFits: boolean; outlineFits: boolean } {

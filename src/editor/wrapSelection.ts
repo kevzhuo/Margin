@@ -2,7 +2,7 @@ import { EditorSelection } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 
 /** Typing one of these while text is selected wraps the selection instead of replacing it. */
-export const WRAP_PAIRS: Record<string, string> = {
+const WRAP_PAIRS: Record<string, string> = {
   "*": "*",
   _: "_",
   "`": "`",

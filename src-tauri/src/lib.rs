@@ -60,6 +60,7 @@ pub fn run() {
             vault::watch_vault,
             vault::unwatch_vault,
             vault::save_attachment,
+            vault::create_vault,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Margin");

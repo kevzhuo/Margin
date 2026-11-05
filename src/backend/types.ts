@@ -32,6 +32,14 @@ export interface SearchHit {
   line: number;
   /** The matching line, trimmed to a readable length. */
   text: string;
+  /** The nearest heading above the line, without its `#`s. */
+  heading?: string | null;
+}
+
+/** The text of an ATX heading line ("## Title ##" gives "Title"), or null. */
+export function headingText(line: string): string | null {
+  const m = /^\s*#{1,6}(?:[ \t]+(.*?))?[ \t#]*$/.exec(line);
+  return m?.[1]?.trim() || null;
 }
 
 export interface VaultBackend {
@@ -42,6 +50,12 @@ export interface VaultBackend {
    * they cancelled. The memory backend returns its demo root immediately.
    */
   pickVault(): Promise<string | null>;
+
+  /**
+   * Ask where to put a new vault and create its (empty) folder. Resolves to
+   * the new root, or null if they cancelled.
+   */
+  createVault(): Promise<string | null>;
 
   /** Recursively list the vault. Hidden entries and non-Markdown files are omitted. */
   listTree(root: string): Promise<FileNode[]>;
@@ -86,8 +100,6 @@ export interface VaultBackend {
 
   openExternal(url: string): Promise<void>;
 }
-
-export const PATH_SEP = "/";
 
 export function dirname(path: string): string {
   const i = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));

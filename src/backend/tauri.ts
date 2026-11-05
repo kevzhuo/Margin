@@ -1,6 +1,6 @@
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { open as openDialog } from "@tauri-apps/plugin-dialog";
+import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { assetPath, type FileNode, type SearchHit, type VaultBackend, type WatchEvent } from "./types";
 
@@ -27,6 +27,11 @@ export class TauriBackend implements VaultBackend {
     const selected = await openDialog({ directory: true, multiple: false, title: "Open vault folder" });
     if (!selected) return null;
     return Array.isArray(selected) ? (selected[0] ?? null) : selected;
+  }
+
+  async createVault(): Promise<string | null> {
+    const path = await saveDialog({ title: "Create a vault", defaultPath: "Notes" });
+    return path ? invoke<string>("create_vault", { path }) : null;
   }
 
   listTree(root: string): Promise<FileNode[]> {

@@ -4,6 +4,7 @@
 import { StateEffect, StateField, type Extension } from "@codemirror/state";
 import { EditorView, showTooltip, ViewPlugin, type Command } from "@codemirror/view";
 import { headingLevelAt, insertLink, setHeading, toggleInline } from "./commands";
+import { focusedField } from "./livePreview";
 
 const setDragging = StateEffect.define<boolean>();
 
@@ -82,19 +83,12 @@ const bubblePlugin = ViewPlugin.fromClass(
   },
 );
 
-// showTooltip values are computed from state, so focus is mirrored into a field.
-const setFocusedForBubble = StateEffect.define<boolean>();
-const bubbleFocusField = StateField.define<boolean>({
-  create: () => false,
-  update(value, tr) {
-    for (const e of tr.effects) if (e.is(setFocusedForBubble)) value = e.value;
-    return value;
-  },
-});
-
-const bubbleTooltip = showTooltip.compute([draggingField, bubbleFocusField, "selection", "doc"], (state) => {
+// Tooltips are computed from state, so this reads the live preview's focus
+// field (which re-checks real focus) rather than the view. The toolbar stays
+// away while focus is elsewhere, such as in the find bar.
+const bubbleTooltip = showTooltip.compute([draggingField, focusedField, "selection", "doc"], (state) => {
   const sel = state.selection.main;
-  if (sel.empty || state.field(draggingField) || !state.field(bubbleFocusField)) return null;
+  if (sel.empty || state.field(draggingField) || !state.field(focusedField)) return null;
   const fromLine = state.doc.lineAt(sel.from).number;
   const toLine = state.doc.lineAt(sel.to).number;
   if (toLine - fromLine > 3) return null;
@@ -111,12 +105,7 @@ const bubbleTooltip = showTooltip.compute([draggingField, bubbleFocusField, "sel
   };
 });
 
+/** The formatting toolbar over selected text. Needs livePreview() for its focus field. */
 export function bubbleToolbar(): Extension {
-  return [
-    draggingField,
-    bubbleFocusField,
-    EditorView.focusChangeEffect.of((_state, focusing) => setFocusedForBubble.of(focusing)),
-    bubblePlugin,
-    bubbleTooltip,
-  ];
+  return [draggingField, bubblePlugin, bubbleTooltip];
 }

@@ -155,7 +155,7 @@ export const insertMathBlock: Command = (view) => {
   return true;
 };
 
-export const formattingKeymap: KeyBinding[] = [
+const formattingKeymap: KeyBinding[] = [
   { key: "Mod-b", run: toggleInline("**") },
   { key: "Mod-i", run: toggleInline("*") },
   { key: "Mod-e", run: toggleInline("`") },

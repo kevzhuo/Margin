@@ -4,6 +4,7 @@ import {
   basename,
   dirname,
   flattenFiles,
+  headingText,
   isMarkdown,
   isWithin,
   joinPath,
@@ -33,7 +34,7 @@ The editor should feel like **Typora**: one pane, no preview toggle, and the *sy
 - [ ] Decide how a table is edited while the caret is inside it
 - [ ] Test IME composition on WKWebView before committing to Tauri
 
-> A good tool is one you forget you are using. The comparison of engines lives in [the research notes](https://github.com/kevzhuo/Nota/blob/main/docs/research.md).
+> A good tool is one you forget you are using. The comparison of engines lives in [the research notes](https://github.com/kevzhuo/Margin/blob/main/docs/research.md).
 
 ## Decoration plan
 
@@ -213,6 +214,14 @@ export class MemoryBackend implements VaultBackend {
     return DEMO_ROOT;
   }
 
+  async createVault(): Promise<string | null> {
+    let root = "/New vault";
+    for (let i = 2; this.dirExists(root); i++) root = `/New vault ${i}`;
+    this.dirs.add(root);
+    this.persist();
+    return root;
+  }
+
   async listTree(root: string): Promise<FileNode[]> {
     const prefix = root.endsWith("/") ? root : root + "/";
     const dirs = new Map<string, FileNode>();
@@ -334,10 +343,16 @@ export class MemoryBackend implements VaultBackend {
       .sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }));
     for (const path of paths) {
       let perFile = 0;
+      let heading: string | null = null;
+      let inFence = false;
       const lines = this.files[path].split("\n");
       for (let i = 0; i < lines.length && perFile < 5; i++) {
-        if (!lines[i].toLowerCase().includes(q)) continue;
-        hits.push({ path, line: i + 1, text: lines[i].trim().slice(0, SEARCH_LINE_MAX) });
+        const line = lines[i];
+        const matched = line.toLowerCase().includes(q);
+        if (matched) hits.push({ path, line: i + 1, text: line.trim().slice(0, SEARCH_LINE_MAX), heading });
+        if (/^\s*(```|~~~)/.test(line)) inFence = !inFence;
+        else if (!inFence) heading = headingText(line) ?? heading;
+        if (!matched) continue;
         perFile++;
         if (hits.length >= limit) return hits;
       }

@@ -99,7 +99,7 @@ export function placement(doc: Text, range: Pending): { from: number; to: number
 }
 
 /** Image files in a paste or drop. Some sources only offer them as items. */
-export function imageFiles(data: DataTransfer | null): File[] {
+function imageFiles(data: DataTransfer | null): File[] {
   if (!data) return [];
   const files = [...data.files].filter(isImageFile);
   if (files.length) return files;

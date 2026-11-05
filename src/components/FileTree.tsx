@@ -184,7 +184,8 @@ export function FileTree() {
     const reveal: MenuItem[] = node && backend?.revealPath ? [{ label: fileManagerLabel(), onSelect: () => void revealPath(node.path) }] : [];
     if (!node) {
       return [
-        { label: "New note", hint: formatShortcut("Mod+N"), onSelect: () => void createNote() },
+        // Right-clicking the list's empty space means the top level.
+        { label: "New note", onSelect: () => void createNote(vaultRoot ?? undefined) },
         { label: "New folder", hint: formatShortcut("Mod+Shift+N"), onSelect: () => void createFolder() },
       ];
     }

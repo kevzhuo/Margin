@@ -100,6 +100,8 @@ export function EditorPane() {
   const viewRef = useRef<EditorView | null>(null);
   const shownPath = useRef<string | null>(null);
   const shownVersion = useRef(-1);
+  /** The jump the shown document opened with, kept in case the editor is rebuilt. */
+  const loadedJump = useRef<Jump | null>(null);
   const activePath = useStore((s) => s.activePath);
   const contentVersion = useStore((s) => s.contentVersion);
   const jumpVersion = useStore((s) => s.jumpVersion);
@@ -169,6 +171,9 @@ export function EditorPane() {
       view.destroy();
       viewRef.current = null;
       useStore.getState().setEditor(null);
+      // A new editor (React mounts twice in development) loads the note afresh.
+      shownPath.current = null;
+      shownVersion.current = -1;
     };
     // The editor is created once; options read the store lazily.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -200,7 +205,9 @@ export function EditorPane() {
     if (!activePath) return;
 
     const len = view.state.doc.length;
-    const jump = s.jump && s.jump.path === activePath ? s.jump : null;
+    // A rebuilt editor re-applies the jump its note opened with (the store's copy is spent).
+    const jump = (s.jump && s.jump.path === activePath ? s.jump : null) ?? (previous === null && loadedJump.current?.path === activePath ? loadedJump.current : null);
+    loadedJump.current = jump;
     if (jump) {
       useStore.setState({ jump: null });
       applyJump(view, jump, false, jump.flash !== false);

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { isTauri, platform } from "./backend";
 import { EditorPane } from "./components/EditorPane";
 import { EmptyState } from "./components/EmptyState";
@@ -179,8 +179,10 @@ function useStrayDrops() {
 export default function App() {
   const ready = useStore((s) => s.ready);
   const activePath = useStore((s) => s.activePath);
-  const sidebarShown = useStore(sidebarVisible);
-  const outlineShown = useStore(outlineVisible);
+  // Without a vault there's nothing for the panels to show; the welcome screen has the window.
+  const hasVault = useStore((s) => s.vaultRoot !== null);
+  const sidebarShown = useStore(sidebarVisible) && hasVault;
+  const outlineShown = useStore(outlineVisible) && hasVault;
   const sidebarPeek = useStore((s) => s.sidebarPeek);
   const sidebarFits = useStore((s) => s.sidebarFits);
   const outlineFits = useStore((s) => s.outlineFits);
@@ -202,6 +204,15 @@ export default function App() {
     if (isTauri()) void connectMenu().then((d) => (disconnect = d));
     return () => disconnect?.();
   }, [init]);
+
+  // Panels take their starting state in place (the vault loads after the
+  // first render); only changes after startup animate.
+  const [settled, setSettled] = useState(false);
+  useEffect(() => {
+    if (!ready) return;
+    const frame = requestAnimationFrame(() => setSettled(true));
+    return () => cancelAnimationFrame(frame);
+  }, [ready]);
 
   // The desktop window starts hidden; show it once the first real frame is painted.
   useEffect(() => {
@@ -231,7 +242,7 @@ export default function App() {
   }, []);
 
   return (
-    <div className={`app${sidebarShown && !sidebarPeek ? "" : " sidebar-hidden"}${outlineShown ? "" : " outline-hidden"}`} data-ready={ready ? "true" : "false"}>
+    <div className={`app${sidebarShown && !sidebarPeek ? "" : " sidebar-hidden"}${outlineShown ? "" : " outline-hidden"}`} data-ready={ready ? "true" : "false"} data-settled={settled || undefined}>
       {/* A panel that doesn't fit is always an overlay, so opening or closing it never pushes the editor. */}
       <div className="sidebar-shell" data-open={sidebarShown} data-overlay={!sidebarFits || undefined} inert={!sidebarShown || undefined}>
         <Sidebar />

@@ -3,11 +3,12 @@ import { findMatch, flattenFiles, stripExtension, type SearchHit } from "../back
 import { useStore } from "../state/store";
 import { formatShortcut, paletteCommands, type AppCommand } from "../state/appCommands";
 import { usePresence } from "./usePresence";
-import { Command, FileText, Plus, Search } from "./icons";
+import { Command, FileText, Plus, Search, TextLines } from "./icons";
+import { markdownToText } from "../editor/inlineMarkdown";
 
 type Item =
   | { kind: "note"; key: string; path: string; title: string; rel: string }
-  | { kind: "hit"; key: string; hit: SearchHit; title: string; rel: string }
+  | { kind: "hit"; key: string; hit: SearchHit; title: string; section: string | null; text: string }
   | { kind: "command"; key: string; command: AppCommand }
   | { kind: "create"; key: string; name: string };
 
@@ -31,7 +32,7 @@ function score(query: string, text: string): number {
 }
 
 /** Wrap the first case-insensitive occurrence of `query` in <mark>. */
-export function highlight(text: string, query: string): ReactNode {
+function highlight(text: string, query: string): ReactNode {
   const m = findMatch(text, query.trim());
   if (!m) return text;
   return (
@@ -142,13 +143,15 @@ export function Palette() {
     }
     const contentHits: Item[] =
       q && hits.query === q
-        ? hits.hits.map((hit) => ({
-            kind: "hit" as const,
-            key: `h:${hit.path}:${hit.line}`,
-            hit,
-            title: stripExtension(hit.path.split(/[\\/]/).pop() ?? hit.path),
-            rel: relOf(hit.path),
-          }))
+        ? hits.hits.flatMap((hit) => {
+            const title = stripExtension(hit.path.split(/[\\/]/).pop() ?? hit.path);
+            const text = markdownToText(hit.text) || hit.text;
+            // A match on a note's own title line repeats the note itself.
+            if (text === title) return [];
+            // The section a match is in; a note's title heading adds nothing.
+            const section = hit.heading ? markdownToText(hit.heading) : null;
+            return [{ kind: "hit" as const, key: `h:${hit.path}:${hit.line}`, hit, title, section: section && section !== title ? section : null, text }];
+          })
         : [];
     const out = [...notes, ...contentHits];
     if (q && !notes.some((n) => n.kind === "note" && n.title.toLowerCase() === q.toLowerCase())) {
@@ -273,10 +276,13 @@ export function Palette() {
                     )}
                     {item.kind === "hit" && (
                       <>
-                        <span className="palette-hit-line">{item.hit.line}</span>
+                        <TextLines className="palette-icon" size={15} />
                         <span className="palette-hit">
-                          <span className="palette-snippet">{highlight(snippet(item.hit.text, q), q)}</span>
-                          <span className="palette-meta">{item.title}</span>
+                          <span className="palette-hit-where">
+                            <span className="palette-hit-note">{item.title}</span>
+                            {item.section && <span className="palette-hit-section">{item.section}</span>}
+                          </span>
+                          <span className="palette-snippet">{highlight(snippet(item.text, q), q)}</span>
                         </span>
                       </>
                     )}

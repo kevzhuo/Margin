@@ -40,9 +40,3 @@ export function countWords(doc: Text): number {
   }
   return count;
 }
-
-/** Title for a note: its first H1, else the file name. */
-export function firstHeading(state: EditorState): string | null {
-  const headings = extractHeadings(state);
-  return headings.length ? headings[0].text : null;
-}

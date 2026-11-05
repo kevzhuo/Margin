@@ -1,5 +1,5 @@
 import { openSearchPanel } from "@codemirror/search";
-import { basename, dirname, flattenFiles, platform, stripExtension } from "../backend";
+import { basename, dirname, platform, stripExtension } from "../backend";
 import { useStore, type FontFamily, type LineWidth, type ThemePref } from "./store";
 
 export interface AppCommand {
@@ -15,7 +15,7 @@ export interface AppCommand {
   run: () => void | Promise<void>;
 }
 
-export const isMac = () => platform() === "macos";
+const isMac = () => platform() === "macos";
 
 const CODE_FOR: Record<string, string> = {
   "\\": "Backslash",
@@ -222,8 +222,4 @@ export function appCommands(): AppCommand[] {
 /** Commands shown in the palette: one per id, the alternates dropped. */
 export function paletteCommands(): AppCommand[] {
   return appCommands().filter((c) => c.id !== "palette.openAlt" && c.id !== "palette.commands" && (c.enabled?.() ?? true));
-}
-
-export function noteCount(): number {
-  return flattenFiles(useStore.getState().tree).length;
 }

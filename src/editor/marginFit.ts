@@ -1,7 +1,7 @@
 import { EditorView, ViewPlugin, type ViewUpdate } from "@codemirror/view";
 
 /** Space kept between a margin mark and the editor's left edge, in px. */
-export const EDGE_GAP = 4;
+const EDGE_GAP = 4;
 /** Marks never shrink below this, so they stay readable. */
 const MIN_SCALE = 0.4;
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { countWords, extractHeadings, firstHeading } from "./outline";
+import { countWords, extractHeadings } from "./outline";
 import { stateOf } from "./testUtils";
 
 describe("extractHeadings", () => {
@@ -20,10 +20,6 @@ describe("extractHeadings", () => {
     expect(extractHeadings(stateOf("# \n")).map((x) => x.text)).toEqual(["Untitled"]);
   });
 
-  it("firstHeading returns the first heading or null", () => {
-    expect(firstHeading(stateOf("para\n\n## Hi"))).toBe("Hi");
-    expect(firstHeading(stateOf("just text"))).toBeNull();
-  });
 });
 
 describe("countWords", () => {

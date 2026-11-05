@@ -145,7 +145,9 @@ html.titlebar-overlay .app {
     opacity var(--dur) var(--ease-out),
     visibility 0s linear var(--dur-slow);
 }
-html.resizing .sidebar-shell {
+html.resizing .sidebar-shell,
+.app:not([data-settled]) .sidebar-shell,
+.app:not([data-settled]) .outline-shell {
   transition: none;
 }
 /* In a window too small to dock a panel, it floats over the editor instead. */
@@ -725,6 +727,113 @@ html.titlebar-overlay .outline {
 .primary-button:hover {
   filter: brightness(1.08);
 }
+.secondary-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: var(--radius-md);
+  background: var(--bg-hover);
+  color: var(--text);
+  font-weight: 500;
+  transition: background-color var(--dur-fast) var(--ease-out);
+}
+.secondary-button:hover {
+  background: var(--bg-active);
+}
+
+/* ---------- Welcome (no vault open) ---------- */
+.welcome {
+  gap: 0;
+  padding-bottom: 12vh;
+}
+.welcome-icon {
+  width: 88px;
+  height: 88px;
+  margin-bottom: 14px;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.welcome h1 {
+  margin: 0 0 6px;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+.welcome > p {
+  margin: 0 0 20px;
+}
+.welcome-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+.welcome-recent {
+  width: min(420px, 100%);
+  margin-top: 36px;
+  text-align: left;
+}
+.welcome-recent h2 {
+  margin: 0 0 6px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+.welcome-recent ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.welcome-recent li {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.welcome-vault {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 7px 36px 7px 10px;
+  border-radius: var(--radius-md);
+  color: var(--text-2);
+  text-align: left;
+  transition: background-color var(--dur-fast) var(--ease-out);
+}
+.welcome-vault:hover {
+  background: var(--bg-hover);
+}
+.welcome-vault-name {
+  flex: none;
+  max-width: 50%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+  font-weight: 500;
+}
+.welcome-vault-path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-3);
+  font-size: 12px;
+}
+.welcome-forget {
+  position: absolute;
+  right: 6px;
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+.welcome-recent li:hover .welcome-forget,
+.welcome-forget:focus-visible {
+  opacity: 1;
+}
 
 /* ---------- Buttons ---------- */
 .button {
@@ -855,7 +964,8 @@ html.titlebar-overlay .outline {
   user-select: text;
   -webkit-user-select: text;
 }
-.palette-input:focus-visible {
+.palette-input:focus-visible,
+.cm-find-field:focus-visible {
   outline: none;
 }
 .palette-input::placeholder {
@@ -915,26 +1025,37 @@ html.titlebar-overlay .outline {
 .palette-hit {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 2px;
   min-width: 0;
   flex: 1;
 }
-.palette-hit .palette-meta {
-  margin-left: 0;
+.palette-hit-where {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  white-space: nowrap;
+}
+.palette-hit-note {
+  flex: none;
+  font-weight: 500;
+}
+.palette-hit-section {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-3);
+  font-size: 12px;
+}
+.palette-hit-section::before {
+  content: "›";
+  margin-right: 6px;
 }
 .palette-snippet {
   color: var(--text-2);
+  font-size: 12.5px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-.palette-hit-line {
-  flex: none;
-  width: 28px;
-  text-align: right;
-  color: var(--text-3);
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
 }
 .palette-kbd {
   margin-left: auto;

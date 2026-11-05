@@ -37,7 +37,7 @@ export interface LivePreviewOptions {
   resolveImage?: (src: string) => string;
 }
 
-export const livePreviewConfig = Facet.define<LivePreviewOptions, LivePreviewOptions>({
+const livePreviewConfig = Facet.define<LivePreviewOptions, LivePreviewOptions>({
   combine: (values) => values[0] ?? {},
 });
 
@@ -45,7 +45,7 @@ export const livePreviewConfig = Facet.define<LivePreviewOptions, LivePreviewOpt
 // Focus tracking. Decorations depend on whether the editor has focus: an
 // unfocused editor renders everything.
 
-export const setFocused = StateEffect.define<boolean>();
+const setFocused = StateEffect.define<boolean>();
 
 export const focusedField = StateField.define<boolean>({
   create: () => false,
@@ -128,6 +128,9 @@ function childText(node: SyntaxNode, name: string, doc: Text): string | null {
 }
 
 function parseTable(node: SyntaxNode, doc: Text): TableData {
+  // Cell offsets are measured from the start of the table's first line,
+  // which is where the rendered widget begins.
+  const base = doc.lineAt(node.from).from;
   const aligns: TableCell["align"][] = [];
   const delimiterRow = node.getChild("TableDelimiter");
   if (delimiterRow) {
@@ -139,24 +142,36 @@ function parseTable(node: SyntaxNode, doc: Text): TableData {
       aligns.push(left && right ? "center" : right ? "right" : left ? "left" : null);
     }
   }
+  // A cell is the stretch between two pipes. Lezer only makes nodes for
+  // cells with content, so walk the pipes to keep empty cells in their column.
   const readRow = (row: SyntaxNode): TableCell[] => {
-    const cells: TableCell[] = [];
-    let i = 0;
-    for (let c = row.firstChild; c; c = c.nextSibling) {
-      if (c.name !== "TableCell") continue;
-      cells.push({
-        text: doc.sliceString(c.from, c.to).trim(),
-        offset: c.from - node.from,
-        align: aligns[i] ?? null,
-      });
-      i++;
-    }
-    return cells;
+    const pipes = row.getChildren("TableDelimiter");
+    const edges = [row.from, ...pipes.flatMap((p) => [p.from, p.to]), row.to];
+    const spans: [number, number][] = [];
+    for (let i = 0; i < edges.length; i += 2) spans.push([edges[i], edges[i + 1]]);
+    // A leading or trailing pipe has nothing outside it.
+    if (pipes.length && !doc.sliceString(row.from, pipes[0].from).trim()) spans.shift();
+    if (pipes.length && !doc.sliceString(pipes[pipes.length - 1].to, row.to).trim()) spans.pop();
+    const cells = row.getChildren("TableCell");
+    return spans.map(([from, to]) => {
+      const cell = cells.find((c) => c.from >= from && c.to <= to);
+      return {
+        text: cell ? doc.sliceString(cell.from, cell.to).trim() : "",
+        offset: (cell ? cell.from : Math.min(from + 1, to)) - base,
+        align: null,
+      };
+    });
   };
   const headerNode = node.getChild("TableHeader");
   const header = headerNode ? readRow(headerNode) : [];
-  const rows = node.getChildren("TableRow").map(readRow);
-  return { header, rows };
+  const width = header.length;
+  // Rows take the header's width: short rows gain empty cells, extra cells are dropped.
+  const fit = (cells: TableCell[], rowEnd: number): TableCell[] =>
+    Array.from({ length: width }, (_, i) => ({ ...(cells[i] ?? { text: "", offset: rowEnd - base }), align: aligns[i] ?? null }));
+  return {
+    header: fit(header, headerNode?.to ?? node.from),
+    rows: node.getChildren("TableRow").map((row) => fit(readRow(row), row.to)),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -376,7 +391,7 @@ export function buildDecorations(state: EditorState, focused = state.field(focus
             const src = childText(node, "URL", doc) ?? "";
             const marks = node.getChildren("LinkMark");
             const alt = marks.length >= 2 ? doc.sliceString(marks[0].to, marks[1].from) : "";
-            out.push(Decoration.replace({ widget: new ImageWidget(resolveImage(src), alt) }).range(n.from, n.to));
+            out.push(Decoration.replace({ widget: new ImageWidget(resolveImage(src), src, alt) }).range(n.from, n.to));
             skipUntil = n.to;
             return false;
           }
@@ -641,7 +656,7 @@ export function buildBlockDecorations(state: EditorState, focused = state.field(
         if (!src) return false;
         const marks = n.node.getChildren("LinkMark");
         const alt = marks.length >= 2 ? doc.sliceString(marks[0].to, marks[1].from) : "";
-        out.push(Decoration.widget({ widget: new ImageWidget(resolveImage(src), alt, true), block: true, side: 1 }).range(doc.lineAt(n.to).to));
+        out.push(Decoration.widget({ widget: new ImageWidget(resolveImage(src), src, alt, true), block: true, side: 1 }).range(doc.lineAt(n.to).to));
         return false;
       },
     });
@@ -654,7 +669,7 @@ const needsRebuild = (u: { docChanged: boolean; startState: EditorState; state: 
   u.transactions.some((tr) => !!tr.selection || tr.reconfigured || tr.effects.some((e) => e.is(setFocused))) ||
   treeChanged(u.startState, u.state);
 
-export const blockField = StateField.define<DecorationSet>({
+const blockField = StateField.define<DecorationSet>({
   create: (state) => buildBlockDecorations(state),
   update(deco, tr) {
     if (needsRebuild({ docChanged: tr.docChanged, startState: tr.startState, state: tr.state, transactions: [tr] })) return buildBlockDecorations(tr.state);
@@ -667,7 +682,7 @@ export const blockField = StateField.define<DecorationSet>({
  * Everything else is decorated only for the viewport, so the cost of a keystroke
  * or caret move depends on what is on screen, not on the length of the note.
  */
-export const livePreviewPlugin = ViewPlugin.fromClass(
+const livePreviewPlugin = ViewPlugin.fromClass(
   class {
     decorations: DecorationSet = Decoration.none;
     atomic: DecorationSet = Decoration.none;

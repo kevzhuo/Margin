@@ -1,3 +1,51 @@
+/* Hairlines between cells inside one rounded outline, and a soft header. */
+.cm-md-table table {
+  border-collapse: separate;
+  border-spacing: 0;
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+.cm-md-table th,
+.cm-md-table td {
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  padding: 7px 12px;
+  text-align: left;
+  vertical-align: top;
+  cursor: text;
+  min-width: 5em;
+  overflow-wrap: break-word;
+  transition: background-color var(--dur-fast) var(--ease-out);
+}
+.cm-md-table tr > :last-child {
+  border-right: 0;
+}
+.cm-md-table tbody tr:last-child > * {
+  border-bottom: 0;
+}
+.cm-md-table th {
+  background: var(--bg-sidebar);
+  font-weight: 600;
+  color: var(--text-2);
+}
+.cm-md-table th:first-child {
+  border-top-left-radius: calc(var(--radius-md) - 1px);
+}
+.cm-md-table th:last-child {
+  border-top-right-radius: calc(var(--radius-md) - 1px);
+}
+/* Clicking a cell edits the table, so rows answer the pointer. */
+.cm-md-table tbody tr:hover > td {
+  background: var(--bg-hover);
+}
+.cm-md-table .cm-md-inline-code {
+  font-size: 0.9em;
+}
+.cm-md-image-alt {
+  font-style: italic;
+  color: var(--text-2);
+}
 /* CodeMirror surface, styled as a Typora-like page. Every markdown class
    below is produced by src/editor/livePreview.ts. */
 
@@ -294,9 +342,31 @@ html.focus-mode .editor-host .cm-editor.cm-focused .cm-line.cm-md-table-raw {
   max-width: 100%;
   border-radius: var(--radius-md);
 }
-.cm-md-image-broken {
+/* An image that didn't load: its file name in a dashed box. */
+.cm-md-image-missing {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  padding: 8px 12px;
+  border: 1px dashed var(--text-3);
+  border-radius: var(--radius-md);
   color: var(--text-3);
-  font-style: italic;
+  font-size: 0.85em;
+  line-height: 1.3;
+  vertical-align: middle;
+}
+.cm-md-image-missing svg {
+  flex: none;
+  width: 16px;
+  height: 16px;
+}
+.cm-md-image-missing-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-2);
+  font-weight: 500;
 }
 /* Under an image's source while the caret is on it. */
 .cm-md-image-preview {
@@ -502,6 +572,35 @@ html.focus-mode .editor-host .cm-editor.cm-focused .cm-line.cm-md-table-raw {
 }
 .cm-md-fence .cm-md-mark {
   font-family: var(--font-mono);
+}
+/* Syntax colors (classes from src/editor/highlight.ts), inside code only. */
+.cm-md-fence .tok-keyword {
+  color: var(--code-keyword);
+}
+.cm-md-fence .tok-string {
+  color: var(--code-string);
+}
+.cm-md-fence .tok-comment {
+  color: var(--code-comment);
+  font-style: italic;
+}
+.cm-md-fence .tok-meta {
+  color: var(--code-comment);
+}
+.cm-md-fence .tok-function {
+  color: var(--code-function);
+}
+.cm-md-fence .tok-number {
+  color: var(--code-number);
+}
+.cm-md-fence .tok-property {
+  color: var(--code-property);
+}
+.cm-md-fence .tok-tag {
+  color: var(--code-tag);
+}
+.cm-md-fence .tok-invalid {
+  color: var(--code-invalid);
 }
 .cm-md-lang {
   float: right;
@@ -710,24 +809,141 @@ html.focus-mode .editor-host .cm-editor.cm-focused .cm-line.cm-md-table-raw {
   animation: fade-in var(--dur) var(--ease-out) 60ms both;
 }
 
-/* ---------- Search panel ---------- */
+/* ---------- Find and replace ---------- */
+/* CodeMirror's panel strip is reduced to an anchor; the find bar floats
+   over the top right of the note as a card. */
 .editor-host .cm-editor .cm-panels {
-  animation: slide-down var(--dur) var(--ease-out);
-  background: var(--bg-sidebar);
+  background: transparent;
+  border: 0;
+  z-index: 5;
+}
+.cm-find {
+  position: absolute;
+  top: 10px;
+  right: 16px;
+  display: flex;
+  align-items: flex-start;
+  gap: 2px;
+  max-width: calc(100% - 32px);
+  padding: 6px;
+  border-radius: var(--radius-lg);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow);
   color: var(--text);
-  border-bottom: 1px solid var(--border);
   font-family: var(--font-ui);
   font-size: 13px;
+  animation: pop-in var(--dur) var(--ease-out);
+  transform-origin: top right;
 }
-.editor-host .cm-editor .cm-panel.cm-search input,
-.editor-host .cm-editor .cm-panel.cm-search button {
-  font: inherit;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--bg);
+.cm-find-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.cm-find-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.cm-find-replace {
+  display: none;
+}
+.cm-find.replacing .cm-find-replace {
+  display: flex;
+}
+.cm-find-box {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 240px;
+  min-width: 0;
+  height: 28px;
+  padding: 0 8px;
+  margin-right: 4px;
+  border-radius: var(--radius-md);
+  background: var(--bg-hover);
+  color: var(--text-3);
+  cursor: text;
+}
+.cm-find-box:focus-within {
+  box-shadow: 0 0 0 2px var(--accent);
+}
+.cm-find-box svg {
+  flex: none;
+  width: 14px;
+  height: 14px;
+}
+.cm-find-field {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
   color: var(--text);
-  padding: 2px 6px;
-  margin: 0 2px;
+  font: inherit;
+}
+.cm-find-field.invalid {
+  color: var(--danger);
+}
+.cm-find-count {
+  flex: none;
+  color: var(--text-3);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.cm-find.no-results .cm-find-count {
+  color: var(--danger);
+}
+.cm-find button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  min-width: 28px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-2);
+  font: inherit;
+  cursor: pointer;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+.cm-find button:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+.cm-find button:active {
+  background: var(--bg-active);
+}
+.cm-find button svg {
+  width: 16px;
+  height: 16px;
+}
+.cm-find-toggle {
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.cm-find-word {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.cm-find-toggle[aria-pressed="true"] {
+  background: var(--bg-selected);
+  color: var(--accent);
+}
+.cm-find-text {
+  font-weight: 500;
+}
+.cm-find-expand svg {
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+.cm-find-expand[aria-expanded="true"] svg {
+  transform: rotate(90deg);
 }
 .cm-searchMatch {
   background: rgba(255, 200, 0, 0.3);
@@ -742,7 +958,7 @@ html.focus-mode .editor-host .cm-editor.cm-focused .cm-line.cm-md-table-raw {
   height: 0;
   vertical-align: baseline;
 }
-.editor-host .cm-editor .cm-line > span[contenteditable="false"]:empty {
+.editor-host .cm-editor .cm-line > span[contenteditable="false"]:empty:not(.cm-md-hr) {
   display: inline-block;
   height: 0;
   vertical-align: baseline;

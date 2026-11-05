@@ -2,7 +2,7 @@ import { StateEffect, StateField, type Extension } from "@codemirror/state";
 import { Decoration, EditorView, type DecorationSet } from "@codemirror/view";
 
 /** How long the highlight stays before it is removed (the CSS fades it out). */
-export const FLASH_MS = 1400;
+const FLASH_MS = 1400;
 
 const addFlash = StateEffect.define<{ from: number; to: number }>();
 const clearFlash = StateEffect.define<null>();
