@@ -77,6 +77,8 @@ interface Settings {
   fontSize: number;
   lineWidth: LineWidth;
   fontFamily: FontFamily;
+  /** Use the whole editor area instead of a centered column. */
+  fullWidth: boolean;
   focusMode: boolean;
   typewriter: boolean;
   recent: string[];
@@ -94,6 +96,7 @@ const defaultSettings: Settings = {
   fontSize: FONT_SIZE_DEFAULT,
   lineWidth: "medium",
   fontFamily: "sans",
+  fullWidth: false,
   focusMode: false,
   typewriter: false,
   recent: [],
@@ -148,8 +151,15 @@ export interface AppState {
   fontSize: number;
   lineWidth: LineWidth;
   fontFamily: FontFamily;
+  fullWidth: boolean;
   focusMode: boolean;
   typewriter: boolean;
+  /** Whether each panel fits beside a comfortably wide editor right now. */
+  sidebarFits: boolean;
+  outlineFits: boolean;
+  /** A panel that doesn't fit can still be opened over the editor. */
+  sidebarPeek: boolean;
+  outlinePeek: boolean;
   paletteOpen: boolean;
   /** Text the palette starts with; ">" opens it in command mode. */
   paletteSeed: string;
@@ -201,6 +211,9 @@ export interface AppState {
   bumpFontSize(delta: number): void;
   setLineWidth(width: LineWidth): void;
   setFontFamily(family: FontFamily): void;
+  setFullWidth(on: boolean): void;
+  setFits(sidebarFits: boolean, outlineFits: boolean): void;
+  closePeeks(): void;
   setFocusMode(on: boolean): void;
   setTypewriter(on: boolean): void;
   openPalette(seed?: string): void;
@@ -252,6 +265,7 @@ export const useStore = create<AppState>((set, get) => {
       fontSize: s.fontSize,
       lineWidth: s.lineWidth,
       fontFamily: s.fontFamily,
+      fullWidth: s.fullWidth,
       focusMode: s.focusMode,
       typewriter: s.typewriter,
       recent: s.recent,
@@ -390,8 +404,13 @@ export const useStore = create<AppState>((set, get) => {
     fontSize: clamp(settings.fontSize, FONT_SIZE_MIN, FONT_SIZE_MAX),
     lineWidth: settings.lineWidth,
     fontFamily: settings.fontFamily,
+    fullWidth: settings.fullWidth,
     focusMode: settings.focusMode,
     typewriter: settings.typewriter,
+    sidebarFits: true,
+    outlineFits: true,
+    sidebarPeek: false,
+    outlinePeek: false,
     paletteOpen: false,
     paletteSeed: "",
     paletteVersion: 0,
@@ -723,13 +742,39 @@ export const useStore = create<AppState>((set, get) => {
     },
 
     toggleSidebar() {
-      set((s) => ({ sidebarOpen: !s.sidebarOpen }));
+      // In a window too small for the sidebar, toggle it as an overlay instead
+      // of changing the saved preference.
+      if (!get().sidebarFits) {
+        set((s) => ({ sidebarPeek: !s.sidebarPeek, outlinePeek: false }));
+        return;
+      }
+      set((s) => ({ sidebarOpen: !s.sidebarOpen, sidebarPeek: false }));
       persist();
     },
 
     toggleOutline() {
-      set((s) => ({ outlineOpen: !s.outlineOpen }));
+      if (!get().outlineFits) {
+        set((s) => ({ outlinePeek: !s.outlinePeek, sidebarPeek: false }));
+        return;
+      }
+      set((s) => ({ outlineOpen: !s.outlineOpen, outlinePeek: false }));
       persist();
+    },
+
+    setFits(sidebarFits, outlineFits) {
+      const s = get();
+      if (s.sidebarFits === sidebarFits && s.outlineFits === outlineFits) return;
+      set({
+        sidebarFits,
+        outlineFits,
+        // An overlay is only needed while the panel doesn't fit.
+        sidebarPeek: sidebarFits ? false : s.sidebarPeek,
+        outlinePeek: outlineFits ? false : s.outlinePeek,
+      });
+    },
+
+    closePeeks() {
+      if (get().sidebarPeek || get().outlinePeek) set({ sidebarPeek: false, outlinePeek: false });
     },
 
     setSidebarWidth(width) {
@@ -753,6 +798,11 @@ export const useStore = create<AppState>((set, get) => {
 
     setFontFamily(fontFamily) {
       set({ fontFamily });
+      persist();
+    },
+
+    setFullWidth(fullWidth) {
+      set({ fullWidth });
       persist();
     },
 
@@ -875,4 +925,26 @@ export function canGoBack(s: Pick<AppState, "historyIndex">): boolean {
 
 export function canGoForward(s: Pick<AppState, "history" | "historyIndex">): boolean {
   return s.historyIndex >= 0 && s.historyIndex < s.history.length - 1;
+}
+
+/** Is the sidebar on screen, docked or as an overlay? */
+export function sidebarVisible(s: Pick<AppState, "sidebarOpen" | "sidebarFits" | "sidebarPeek">): boolean {
+  return (s.sidebarOpen && s.sidebarFits) || s.sidebarPeek;
+}
+
+export function outlineVisible(s: Pick<AppState, "outlineOpen" | "outlineFits" | "outlinePeek">): boolean {
+  return (s.outlineOpen && s.outlineFits) || s.outlinePeek;
+}
+
+/** Narrowest editor area that panels may leave before they hide themselves. */
+export const MIN_EDITOR_WIDTH = 560;
+/** Below this window width the sidebar becomes an overlay. */
+export const SIDEBAR_DOCK_MIN_WINDOW = 640;
+export const OUTLINE_WIDTH = 220;
+
+/** Which panels fit beside the editor at a given window width. */
+export function panelFits(windowWidth: number, sidebarOpen: boolean, sidebarWidth: number): { sidebarFits: boolean; outlineFits: boolean } {
+  const sidebarFits = windowWidth >= SIDEBAR_DOCK_MIN_WINDOW;
+  const sidebarSpace = sidebarOpen && sidebarFits ? sidebarWidth : 0;
+  return { sidebarFits, outlineFits: windowWidth - sidebarSpace - OUTLINE_WIDTH >= MIN_EDITOR_WIDTH };
 }

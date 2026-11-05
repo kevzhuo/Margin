@@ -16,13 +16,31 @@
   line-height: 1.6;
   font-family: var(--font-editor);
 }
+/* The editor area is a size container, so gutters and headings respond to the
+   space the editor actually has, not the window size. */
+.editor-host {
+  container-type: inline-size;
+}
+.editor-host .cm-editor {
+  --editor-gutter: 48px;
+  --li-indent: 1.5em;
+}
+@supports (width: 1cqi) {
+  .editor-host .cm-editor {
+    --editor-gutter: clamp(40px, 6cqi, 80px);
+  }
+}
 .editor-host .cm-editor .cm-content {
   font-family: var(--font-editor);
-  max-width: calc(var(--editor-measure) + 96px);
+  max-width: calc(var(--editor-measure) + 2 * var(--editor-gutter));
   width: 100%;
   margin: 0 auto;
-  padding: 24px 48px 45vh;
+  padding: 24px var(--editor-gutter) 45vh;
   caret-color: var(--text);
+}
+/* Full width: use the whole editor area, keeping only the gutters. */
+html.full-width .editor-host .cm-editor .cm-content {
+  max-width: none;
 }
 .editor-host .cm-editor .cm-line {
   position: relative;
@@ -81,14 +99,21 @@ html.focus-mode .editor-host .cm-editor.cm-focused .cm-line.cm-md-table-raw {
 .cm-md-margin-mark {
   position: absolute;
   right: 100%;
-  margin-right: 10px;
+  margin-right: 8px;
   top: 2px;
   white-space: pre;
   pointer-events: none;
 }
-.cm-md-ghost {
-  font-size: 13px;
-  top: 0.45em;
+/* Raw task marker shown beside its checkbox on the caret's line. */
+.cm-md-checkbox .cm-md-ghost {
+  position: absolute;
+  right: 100%;
+  bottom: -0.1em;
+  margin-right: 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1;
+  pointer-events: none;
 }
 
 /* ---------- Headings ---------- */
@@ -130,22 +155,43 @@ html.focus-mode .editor-host .cm-editor.cm-focused .cm-line.cm-md-table-raw {
   font-size: 0.75em;
   line-height: 1;
 }
+/* Heading marks are drawn smaller than the heading so even "####" fits the
+   narrowest gutter. Each line-height is the heading's line-height divided by
+   the scale, so the mark's box matches the heading's first line and the mark
+   sits centered beside it. */
 .cm-md-heading .cm-md-margin-mark {
-  font-weight: 400;
+  font-weight: 500;
 }
 .cm-md-h1 .cm-md-margin-mark {
   top: 18px;
+  font-size: 0.6em;
+  line-height: 2.0833;
 }
 .cm-md-h2 .cm-md-margin-mark {
   top: 18px;
+  font-size: 0.7em;
+  line-height: 1.857;
 }
 .cm-md-h3 .cm-md-margin-mark {
   top: 12px;
+  font-size: 0.8em;
+  line-height: 1.6875;
 }
 .cm-md-h4 .cm-md-margin-mark,
 .cm-md-h5 .cm-md-margin-mark,
 .cm-md-h6 .cm-md-margin-mark {
   top: 8px;
+  font-size: 0.72em;
+  line-height: 2.222;
+}
+/* Narrow columns get smaller headings so titles don't break every word. */
+@container (max-width: 560px) {
+  .editor-host .cm-editor .cm-line.cm-md-h1 {
+    font-size: 1.55em;
+  }
+  .editor-host .cm-editor .cm-line.cm-md-h2 {
+    font-size: 1.25em;
+  }
 }
 
 /* ---------- Inline ---------- */
@@ -207,11 +253,24 @@ html.focus-mode .editor-host .cm-editor.cm-focused .cm-line.cm-md-table-raw {
 }
 
 /* ---------- Lists ---------- */
+/* Every marker sits in a box of the same width whether its raw syntax or its
+   rendered form is showing, so text never moves when the caret arrives. */
+.cm-md-li-ul {
+  --li-mark: 1.3em;
+}
+.cm-md-li-ol {
+  /* Room for "10. " so one- and two-digit items share a text column. */
+  --li-mark: 1.85em;
+}
+.cm-md-li-task {
+  --li-mark: 1.6em;
+}
 .cm-md-listmark,
 .cm-md-bullet {
   display: inline-block;
-  width: 1.3em;
+  width: var(--li-mark, 1.3em);
   text-align: left;
+  white-space: pre;
 }
 .cm-md-listmark {
   color: var(--text-3);
@@ -246,11 +305,15 @@ html.focus-mode .editor-host .cm-editor.cm-focused .cm-line.cm-md-table-raw {
   height: 5px;
 }
 .cm-md-olmark {
+  display: inline-block;
+  min-width: var(--li-mark, 1.85em);
+  white-space: pre;
   color: var(--text-2);
+  font-variant-numeric: tabular-nums;
 }
 .cm-md-checkbox {
   display: inline-block;
-  width: 1.6em;
+  width: var(--li-mark, 1.6em);
   vertical-align: baseline;
   position: relative;
   height: 1em;
@@ -325,12 +388,38 @@ html.focus-mode .editor-host .cm-editor.cm-focused .cm-line.cm-md-table-raw {
   padding-left: 16px;
   margin-left: 0;
 }
-.cm-md-quote .cm-md-margin-mark {
-  margin-right: 10px;
+.editor-host .cm-editor .cm-line.cm-md-quote {
+  --quote-pad: 16px;
+}
+
+/* ---------- List layout ---------- */
+/* Hanging indent: pad by nesting depth plus the marker box, then pull the
+   first line back by the marker box. Wrapped lines line up with the text. */
+.editor-host .cm-editor .cm-line.cm-md-li,
+.editor-host .cm-editor .cm-line.cm-md-li-cont {
+  padding-left: calc(var(--quote-pad, 0px) + var(--li-depth, 0) * var(--li-indent) + var(--li-mark));
+}
+.editor-host .cm-editor .cm-line.cm-md-li {
+  text-indent: calc(-1 * var(--li-mark));
+}
+/* Inline blocks inherit text-indent; only the line itself should hang. */
+.cm-md-li *,
+.cm-md-li-cont * {
+  text-indent: 0;
+}
+
+/* ---------- Spacing ---------- */
+/* Blank lines between blocks are shorter than text lines, so a paragraph
+   break reads like page spacing rather than a whole empty line. */
+.editor-host .cm-editor .cm-line.cm-md-blank {
+  line-height: 1.1;
 }
 
 /* ---------- Code fences ---------- */
 .editor-host .cm-editor .cm-line.cm-md-fence {
+  /* Long code lines break inside tokens rather than after their indentation,
+     which would leave an empty-looking row and lose the indent. */
+  word-break: break-all;
   background: var(--fence-bg);
   font-family: var(--font-mono);
   font-size: 13px;
@@ -381,6 +470,9 @@ html.focus-mode .editor-host .cm-editor.cm-focused .cm-line.cm-md-table-raw {
   padding: 6px 0;
   font-size: 14px;
   line-height: 1.45;
+  /* Wide tables scroll inside their own box instead of widening the page. */
+  overflow-x: auto;
+  max-width: 100%;
 }
 .cm-md-table table {
   border-collapse: collapse;
@@ -393,6 +485,8 @@ html.focus-mode .editor-host .cm-editor.cm-focused .cm-line.cm-md-table-raw {
   text-align: left;
   vertical-align: top;
   cursor: text;
+  min-width: 5em;
+  overflow-wrap: break-word;
 }
 .cm-md-table th {
   background: var(--bg-sidebar);
@@ -402,7 +496,9 @@ html.focus-mode .editor-host .cm-editor.cm-focused .cm-line.cm-md-table-raw {
 .cm-md-table-raw {
   font-family: var(--font-mono);
   font-size: 13px;
-  white-space: pre;
+  /* Raw table rows wrap like any other line rather than running off screen. */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 /* ---------- Horizontal rule ---------- */

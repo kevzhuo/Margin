@@ -3,13 +3,31 @@ import { FONT_SIZE_DEFAULT, FONT_SIZE_MAX, FONT_SIZE_MIN, useStore, type FontFam
 import { formatShortcut } from "../state/appCommands";
 import { usePresence } from "./usePresence";
 
-function Segmented<T extends string>({ label, value, options, onChange }: { label: string; value: T; options: [T, string][]; onChange: (v: T) => void }) {
+function Segmented<T extends string>({
+  label,
+  value,
+  options,
+  onChange,
+  disabled,
+}: {
+  label: string;
+  value: T;
+  options: [T, string][];
+  onChange: (v: T) => void;
+  disabled?: boolean;
+}) {
   const index = Math.max(0, options.findIndex(([v]) => v === value));
   return (
-    <div className="segmented" role="radiogroup" aria-label={label} style={{ "--count": options.length, "--index": index } as React.CSSProperties}>
+    <div
+      className={`segmented${disabled ? " disabled" : ""}`}
+      role="radiogroup"
+      aria-label={label}
+      aria-disabled={disabled || undefined}
+      style={{ "--count": options.length, "--index": index } as React.CSSProperties}
+    >
       <span className="segmented-thumb" aria-hidden="true" />
       {options.map(([v, text]) => (
-        <button key={v} role="radio" aria-checked={v === value} className={v === value ? "on" : ""} onClick={() => onChange(v)}>
+        <button key={v} role="radio" aria-checked={v === value} className={v === value ? "on" : ""} disabled={disabled} onClick={() => onChange(v)}>
           {text}
         </button>
       ))}
@@ -45,6 +63,7 @@ export function SettingsPopover() {
   const fontSize = useStore((s) => s.fontSize);
   const fontFamily = useStore((s) => s.fontFamily);
   const lineWidth = useStore((s) => s.lineWidth);
+  const fullWidth = useStore((s) => s.fullWidth);
   const focusMode = useStore((s) => s.focusMode);
   const typewriter = useStore((s) => s.typewriter);
   const { mounted, closing } = usePresence(open, 140);
@@ -99,6 +118,7 @@ export function SettingsPopover() {
           onChange={s.setFontFamily}
         />
       </Row>
+      <Toggle label="Full width" checked={fullWidth} onChange={s.setFullWidth} />
       <Row label="Line width">
         <Segmented<LineWidth>
           label="Line width"
@@ -109,6 +129,7 @@ export function SettingsPopover() {
             ["wide", "Wide"],
           ]}
           onChange={s.setLineWidth}
+          disabled={fullWidth}
         />
       </Row>
       <div className="setting-row">

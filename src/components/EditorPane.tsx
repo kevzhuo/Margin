@@ -8,6 +8,16 @@ import { dirname, findMatch, flattenFiles, resolveRelative, slugify } from "../b
 import { useStore, type Jump } from "../state/store";
 
 const MAX_SELECTION_COUNT = 200_000;
+const TYPING_IDLE_MS = 1200;
+let typingTimer: ReturnType<typeof setTimeout> | null = null;
+
+/** While the user types, the status bar steps aside so it never covers text. */
+function markTyping() {
+  const root = document.documentElement;
+  root.classList.add("is-typing");
+  if (typingTimer) clearTimeout(typingTimer);
+  typingTimer = setTimeout(() => root.classList.remove("is-typing"), TYPING_IDLE_MS);
+}
 
 function onUpdate(update: ViewUpdate) {
   const s = useStore.getState();
@@ -95,6 +105,7 @@ export function EditorPane() {
     onDocChanged: (doc, update) => {
       useStore.getState().updateContent(doc);
       useStore.getState().setWordCount(countWords(update.state.doc));
+      if (update.transactions.some((tr) => tr.isUserEvent("input") || tr.isUserEvent("delete"))) markTyping();
     },
     onUpdate,
     onOpenLink: openLink,

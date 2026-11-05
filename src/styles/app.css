@@ -110,6 +110,7 @@ mark {
 }
 
 .app {
+  position: relative;
   display: flex;
   height: 100%;
   background: var(--bg);
@@ -146,6 +147,27 @@ html.titlebar-overlay .app {
 }
 html.resizing .sidebar-shell {
   transition: none;
+}
+/* In a window too small to dock a panel, it floats over the editor instead. */
+.sidebar-shell[data-overlay],
+.outline-shell[data-overlay] {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 30;
+}
+.sidebar-shell[data-overlay] {
+  left: 0;
+}
+.outline-shell[data-overlay] {
+  right: 0;
+}
+.sidebar-shell[data-overlay][data-open="true"],
+.outline-shell[data-overlay][data-open="true"] {
+  box-shadow: var(--shadow);
+}
+.sidebar-shell[data-overlay] .sidebar {
+  background: var(--bg-sidebar);
 }
 
 /* ---------- Sidebar ---------- */
@@ -424,6 +446,7 @@ html.resizing .sidebar-resizer::after {
   background: var(--bg);
 }
 .topbar {
+  container-type: inline-size;
   height: var(--topbar-height);
   flex: none;
   display: flex;
@@ -441,6 +464,7 @@ html.titlebar-overlay .app.sidebar-hidden .topbar {
   gap: 0;
 }
 .crumbs {
+  flex: 1 1 auto;
   display: flex;
   align-items: center;
   gap: 2px;
@@ -456,6 +480,19 @@ html.titlebar-overlay .app.sidebar-hidden .topbar {
   color: var(--text-2);
   padding: 2px 6px;
   border-radius: var(--radius-sm);
+  min-width: 0;
+  /* Folders give up space long before the note's own name does. */
+  flex-shrink: 8;
+}
+.crumb.current {
+  flex-shrink: 1;
+  min-width: 64px;
+}
+/* In a narrow top bar only the note's name is shown. */
+@container (max-width: 420px) {
+  .crumb:not(.current) {
+    display: none;
+  }
 }
 .crumb.current {
   color: var(--text);
@@ -525,12 +562,30 @@ html.titlebar-overlay .app.sidebar-hidden .topbar {
   position: absolute;
   right: 16px;
   bottom: 10px;
+  z-index: 2;
   font-size: 12px;
   color: var(--text-3);
   display: flex;
-  gap: 12px;
+  align-items: center;
+  gap: 6px;
   pointer-events: none;
   font-variant-numeric: tabular-nums;
+  transition: opacity var(--dur-slow) var(--ease-out);
+}
+/* Pills with the page color behind them, so text scrolling underneath never
+   collides with the counts. */
+.status-pill,
+.save-state {
+  display: inline-flex;
+  gap: 10px;
+  padding: 3px 9px;
+  border-radius: 6px;
+  background: var(--bg);
+  box-shadow: 0 0 0 1px var(--border);
+}
+/* Out of the way while typing; back after a short pause. */
+html.is-typing .statusbar {
+  opacity: 0;
 }
 .save-state {
   opacity: 0;
@@ -551,7 +606,7 @@ html.titlebar-overlay .app.sidebar-hidden .topbar {
 }
 .reading-time::before {
   content: "·";
-  margin-right: 12px;
+  margin-right: 10px;
 }
 
 /* ---------- Outline ---------- */
@@ -1015,6 +1070,9 @@ html.titlebar-overlay .outline {
   font-size: 12px;
   color: var(--text-2);
   border-radius: 5px;
+}
+.segmented.disabled {
+  opacity: 0.45;
 }
 .segmented button.on {
   color: var(--text);

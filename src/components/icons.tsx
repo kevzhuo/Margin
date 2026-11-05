@@ -131,3 +131,13 @@ export const Hash = ({ size = 16, ...p }: IconProps) => (
     <path d="M5 9h14M5 15h14M10 4L8 20M16 4l-2 16" />
   </svg>
 );
+export const ArrowsHorizontal = ({ size = 16, ...p }: IconProps) => (
+  <svg {...base(size, p)}>
+    <path d="M7 8l-4 4 4 4M17 8l4 4-4 4M3 12h18" />
+  </svg>
+);
+export const ArrowsInward = ({ size = 16, ...p }: IconProps) => (
+  <svg {...base(size, p)}>
+    <path d="M4 8l4 4-4 4M20 8l-4 4 4 4M8 12H2M16 12h6" />
+  </svg>
+);

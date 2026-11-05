@@ -16,14 +16,16 @@ export function StatusBar() {
   return (
     <div className="statusbar" aria-live="polite">
       <span className={`save-state${status ? " visible" : ""}${saveState === "error" ? " error" : ""}`}>{status || "Saved"}</span>
-      {selectionWords > 0 ? (
-        <span className="word-count selection">
-          {selectionWords.toLocaleString()} of {words(wordCount)}
-        </span>
-      ) : (
-        <span className="word-count">{words(wordCount)}</span>
-      )}
-      {wordCount > 0 && <span className="reading-time">{minutes} min read</span>}
+      <span className="status-pill">
+        {selectionWords > 0 ? (
+          <span className="word-count selection">
+            {selectionWords.toLocaleString()} of {words(wordCount)}
+          </span>
+        ) : (
+          <span className="word-count">{words(wordCount)}</span>
+        )}
+        {wordCount > 0 && <span className="reading-time">{minutes} min read</span>}
+      </span>
     </div>
   );
 }

@@ -20,40 +20,25 @@ export class BulletWidget extends WidgetType {
   }
 }
 
-/** Shows raw syntax in the left margin while the line is active (used for task markers). */
-export class GhostMarkWidget extends WidgetType {
-  constructor(readonly text: string) {
-    super();
-  }
-  eq(other: GhostMarkWidget) {
-    return other.text === this.text;
-  }
-  toDOM() {
-    const span = document.createElement("span");
-    span.className = "cm-md-mark cm-md-margin-mark cm-md-ghost";
-    span.textContent = this.text;
-    span.setAttribute("aria-hidden", "true");
-    return span;
-  }
-  ignoreEvent() {
-    return false;
-  }
-}
-
-/** A real checkbox replacing `- [ ]`. Clicking it edits the document. */
+/**
+ * A real checkbox replacing `- [ ] `. Clicking it edits the document.
+ * `source` is the raw marker, shown beside the box while the caret is on the line.
+ */
 export class CheckboxWidget extends WidgetType {
-  constructor(readonly checked: boolean) {
+  constructor(
+    readonly checked: boolean,
+    readonly source: string | null = null,
+  ) {
     super();
   }
   eq(other: CheckboxWidget) {
-    return other.checked === this.checked;
+    return other.checked === this.checked && other.source === this.source;
   }
   toDOM(view: EditorView) {
     const wrap = document.createElement("span");
     wrap.className = "cm-md-checkbox";
     const input = document.createElement("input");
     input.type = "checkbox";
-    this.sync(input);
     // Keep focus in the editor.
     input.addEventListener("mousedown", (e) => e.preventDefault());
     // Let the native toggle happen (cancelling the click would make the browser
@@ -62,18 +47,31 @@ export class CheckboxWidget extends WidgetType {
       if (!toggleTaskAt(view, view.posAtDOM(wrap))) input.checked = !input.checked;
     });
     wrap.appendChild(input);
+    this.sync(wrap);
     return wrap;
   }
-  /** Reuse the element when only the checked state changed, so CSS transitions play. */
+  /** Reuse the element when only the state changed, so CSS transitions play. */
   updateDOM(dom: HTMLElement) {
-    const input = dom.querySelector("input");
-    if (!input) return false;
-    this.sync(input);
+    if (!dom.querySelector("input")) return false;
+    this.sync(dom);
     return true;
   }
-  private sync(input: HTMLInputElement) {
+  private sync(wrap: HTMLElement) {
+    const input = wrap.querySelector("input")!;
     input.checked = this.checked;
     input.setAttribute("aria-label", this.checked ? "Mark task as not done" : "Mark task as done");
+    let ghost = wrap.querySelector<HTMLElement>(".cm-md-ghost");
+    if (this.source === null) {
+      ghost?.remove();
+      return;
+    }
+    if (!ghost) {
+      ghost = document.createElement("span");
+      ghost.className = "cm-md-mark cm-md-ghost";
+      ghost.setAttribute("aria-hidden", "true");
+      wrap.appendChild(ghost);
+    }
+    ghost.textContent = this.source;
   }
   ignoreEvent() {
     return true;

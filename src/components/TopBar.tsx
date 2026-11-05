@@ -1,12 +1,14 @@
-import { canGoBack, canGoForward, crumbsFor, useStore } from "../state/store";
+import { canGoBack, canGoForward, crumbsFor, outlineVisible, sidebarVisible, useStore } from "../state/store";
 import { formatShortcut } from "../state/appCommands";
-import { ChevronLeft, ChevronRightLg, FileText, PanelLeft, PanelRight } from "./icons";
+import { ArrowsHorizontal, ArrowsInward, ChevronLeft, ChevronRightLg, FileText, PanelLeft, PanelRight } from "./icons";
 
 export function TopBar() {
   const vaultRoot = useStore((s) => s.vaultRoot);
   const activePath = useStore((s) => s.activePath);
-  const sidebarOpen = useStore((s) => s.sidebarOpen);
-  const outlineOpen = useStore((s) => s.outlineOpen);
+  const sidebarOpen = useStore(sidebarVisible);
+  const outlineOpen = useStore(outlineVisible);
+  const fullWidth = useStore((s) => s.fullWidth);
+  const setFullWidth = useStore((s) => s.setFullWidth);
   const back = useStore(canGoBack);
   const forward = useStore(canGoForward);
   const toggleSidebar = useStore((s) => s.toggleSidebar);
@@ -19,7 +21,7 @@ export function TopBar() {
     <div className="topbar" data-tauri-drag-region="">
       <div className="topbar-nav">
         <button
-          className="icon-button sidebar-toggle"
+          className="icon-button sidebar-toggle panel-toggle"
           onClick={toggleSidebar}
           aria-label={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
           aria-pressed={sidebarOpen}
@@ -53,7 +55,16 @@ export function TopBar() {
       </nav>
       <div className="topbar-actions">
         <button
-          className={`icon-button${outlineOpen ? " on" : ""}`}
+          className={`icon-button${fullWidth ? " on" : ""}`}
+          onClick={() => setFullWidth(!fullWidth)}
+          aria-label="Full width"
+          aria-pressed={fullWidth}
+          title={fullWidth ? "Use page margins" : "Use full width"}
+        >
+          {fullWidth ? <ArrowsInward /> : <ArrowsHorizontal />}
+        </button>
+        <button
+          className={`icon-button panel-toggle${outlineOpen ? " on" : ""}`}
           onClick={toggleOutline}
           aria-label="Toggle outline panel"
           aria-pressed={outlineOpen}
