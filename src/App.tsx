@@ -155,6 +155,27 @@ function useShortcuts() {
   }, []);
 }
 
+/**
+ * A file dropped anywhere the editor doesn't handle it would make the web
+ * view navigate to that file, replacing the app. Refuse such drops; the
+ * editor takes its own (images) before this sees them.
+ */
+function useStrayDrops() {
+  useEffect(() => {
+    const refuse = (event: DragEvent) => {
+      if (!event.dataTransfer || ![...event.dataTransfer.types].includes("Files") || event.defaultPrevented) return;
+      event.preventDefault();
+      if (event.type === "dragover") event.dataTransfer.dropEffect = "none";
+    };
+    window.addEventListener("dragover", refuse);
+    window.addEventListener("drop", refuse);
+    return () => {
+      window.removeEventListener("dragover", refuse);
+      window.removeEventListener("drop", refuse);
+    };
+  }, []);
+}
+
 export default function App() {
   const ready = useStore((s) => s.ready);
   const activePath = useStore((s) => s.activePath);
@@ -169,6 +190,7 @@ export default function App() {
   useResponsivePanels();
   useWindowTitle();
   useShortcuts();
+  useStrayDrops();
 
   useEffect(() => {
     const root = document.documentElement;

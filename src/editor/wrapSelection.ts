@@ -8,10 +8,12 @@ export const WRAP_PAIRS: Record<string, string> = {
   "`": "`",
   "~": "~",
   '"': '"',
+  $: "$",
 };
 
 /**
- * Select a word and type `*` to italicise it, again for bold, `` ` `` for code.
+ * Select a word and type `*` to italicise it, again for bold, `` ` `` for code,
+ * `$` for math.
  * The wrapped text stays selected so delimiters can be stacked.
  */
 export const wrapSelectionOnType = EditorView.inputHandler.of((view, _from, _to, text) => {

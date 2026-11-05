@@ -298,6 +298,12 @@ html.focus-mode .editor-host .cm-editor.cm-focused .cm-line.cm-md-table-raw {
   color: var(--text-3);
   font-style: italic;
 }
+/* Under an image's source while the caret is on it. */
+.cm-md-image-preview {
+  display: block;
+  width: fit-content;
+  margin: 2px 0 8px;
+}
 
 /* ---------- Lists ---------- */
 /* Every marker sits in a box of the same width whether its raw syntax or its
@@ -510,6 +516,64 @@ html.focus-mode .editor-host .cm-editor.cm-focused .cm-line.cm-md-table-raw {
 }
 .cm-md-indented-code {
   border-radius: var(--radius-md);
+}
+
+/* ---------- Math ---------- */
+/* KaTeX draws at 1.21em by default; a little smaller sits better in body text. */
+.cm-md-math .katex {
+  font-size: 1.1em;
+}
+.cm-md-math {
+  cursor: text;
+}
+.cm-md-math-block,
+.cm-md-math-preview {
+  display: block;
+  padding: 6px 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+.cm-md-math-block .katex-display,
+.cm-md-math-preview .katex-display {
+  margin: 0;
+}
+/* Wide formulas scroll inside themselves instead of widening the page. */
+.cm-md-math-inline .katex-display {
+  margin: 0.4em 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+/* The live preview under a formula's source while you edit it. */
+.cm-md-math-preview {
+  margin: 2px 0 8px;
+  border-radius: var(--radius-md);
+  background: var(--bg-hover);
+}
+.cm-md-math-src,
+.cm-md-math-line {
+  font-family: var(--font-mono);
+  font-size: 0.88em;
+  font-variant-ligatures: none;
+}
+.cm-md-math-line {
+  color: var(--text-2);
+}
+.cm-md-math-error {
+  color: var(--danger);
+  font-family: var(--font-mono);
+  font-size: 0.88em;
+}
+.cm-md-math-preview.cm-md-math-error {
+  padding: 6px 10px;
+  white-space: pre-wrap;
+  background: var(--danger-bg);
+}
+.cm-md-math-empty {
+  color: var(--text-3);
+  font-size: 0.9em;
+}
+.cm-md-math-preview.cm-md-math-empty {
+  display: none;
 }
 
 /* ---------- Tables ---------- */

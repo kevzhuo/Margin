@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildDecorations, buildTableDecorations } from "./livePreview";
+import { buildDecorations, buildBlockDecorations } from "./livePreview";
 import { collect, dimmed, hidden, lineClass, markClass, stateOf, type DecoInfo } from "./testUtils";
 
 function decos(doc: string, cursor?: number | { anchor: number; head?: number }, focused = true): DecoInfo[] {
@@ -378,15 +378,88 @@ describe("viewport-limited builds", () => {
     const doc = "intro\n\n| a | b |\n| - | - |\n| 1 | 2 |\n\nend";
     const state = stateOf(doc, 0);
     expect(collect(buildDecorations(state, true, { tables: "skip" }), doc).some((x) => x.widget === "TableWidget")).toBe(false);
-    const tables = collect(buildTableDecorations(state, true), doc);
+    const tables = collect(buildBlockDecorations(state, true), doc);
     expect(tables.map((x) => [x.widget, x.block])).toEqual([["TableWidget", true]]);
     // With the caret inside, the table is raw and the field adds nothing.
     const inside = stateOf(doc, doc.indexOf("| 1"));
-    expect(collect(buildTableDecorations(inside, true), doc)).toEqual([]);
+    expect(collect(buildBlockDecorations(inside, true), doc)).toEqual([]);
   });
 
   it("finds tables nested in lists and quotes", () => {
     const doc = "> | a |\n> | - |\n> | 1 |\n\nx";
-    expect(collect(buildTableDecorations(stateOf(doc, doc.length), true), doc).some((x) => x.widget === "TableWidget")).toBe(true);
+    expect(collect(buildBlockDecorations(stateOf(doc, doc.length), true), doc).some((x) => x.widget === "TableWidget")).toBe(true);
+  });
+});
+
+describe("math", () => {
+  const blocks = (doc: string, cursor: number, focused = true) => collect(buildBlockDecorations(stateOf(doc, cursor), focused), doc);
+  const math = (d: DecoInfo) => d.widgetObj as { tex: string; display: boolean; mode: string };
+
+  it("renders inline math away from the caret", () => {
+    const doc = "Energy $E = mc^2$ here.\n\nend";
+    const d = decos(doc, doc.length);
+    const w = d.find((x) => x.widget === "MathWidget")!;
+    expect([w.kind, w.text]).toEqual(["replace", "$E = mc^2$"]);
+    expect(math(w)).toMatchObject({ tex: "E = mc^2", display: false, mode: "inline" });
+  });
+
+  it("shows inline math's source at the caret, delimiters dimmed", () => {
+    const doc = "Energy $E = mc^2$ here.";
+    const d = decos(doc, doc.indexOf("mc"));
+    expect(d.some((x) => x.widget === "MathWidget")).toBe(false);
+    expect(d.some((x) => markClass(x, "cm-md-math-src") && x.text === "$E = mc^2$")).toBe(true);
+    expect(d.filter((x) => dimmed(x) && x.text === "$")).toHaveLength(2);
+  });
+
+  it("draws $$ inside a paragraph in display style", () => {
+    const doc = "So $$x^2$$ is it\n\nend";
+    expect(math(decos(doc, doc.length).find((x) => x.widget === "MathWidget")!).display).toBe(true);
+  });
+
+  it("replaces a closed block with a rendered formula away from the caret", () => {
+    const doc = "Intro\n\n$$\n\\int_0^1 x\\,dx\n$$\n\nend";
+    const b = blocks(doc, doc.length);
+    expect(b).toHaveLength(1);
+    expect([b[0].kind, b[0].block, b[0].text]).toEqual(["replace", true, "$$\n\\int_0^1 x\\,dx\n$$"]);
+    expect(math(b[0])).toMatchObject({ tex: "\\int_0^1 x\\,dx", display: true, mode: "block" });
+    // The view plugin leaves the block alone.
+    expect(decos(doc, doc.length).some((x) => lineClass(x, "cm-md-math-line"))).toBe(false);
+  });
+
+  it("shows a block's source with a live preview under it at the caret", () => {
+    const doc = "Intro\n\n$$\nx^2\n$$\n\nend";
+    const caret = doc.indexOf("x^2");
+    const b = blocks(doc, caret);
+    expect(b.map((x) => [x.kind, x.block, x.from])).toEqual([["widget", true, doc.indexOf("$$\n\nend") + 2]]);
+    expect(math(b[0])).toMatchObject({ tex: "x^2", mode: "preview" });
+    const d = decos(doc, caret);
+    expect(d.filter((x) => lineClass(x, "cm-md-math-line"))).toHaveLength(3);
+    expect(d.filter((x) => dimmed(x) && x.text === "$$")).toHaveLength(2);
+  });
+
+  it("renders everything when the editor isn't focused", () => {
+    const doc = "$$\nx\n$$";
+    expect(blocks(doc, 3, false).map((x) => math(x).mode)).toEqual(["block"]);
+  });
+
+  it("leaves an unclosed block as source, without a preview elsewhere", () => {
+    const doc = "$$\nx = 1\n\nAfter";
+    expect(blocks(doc, doc.length)).toEqual([]);
+    expect(decos(doc, doc.length).filter((x) => lineClass(x, "cm-md-math-line"))).toHaveLength(2);
+  });
+});
+
+describe("image previews", () => {
+  const doc = "Text\n\n![Sunset](attachments/sunset.png)\n\nend";
+
+  it("shows the picture under an image's source at the caret", () => {
+    const b = collect(buildBlockDecorations(stateOf(doc, doc.indexOf("Sunset")), true), doc);
+    const lineEnd = doc.indexOf(")") + 1;
+    expect(b.map((x) => [x.widget, x.block, x.from])).toEqual([["ImageWidget", true, lineEnd]]);
+    expect(b[0].widgetObj).toMatchObject({ src: "attachments/sunset.png", alt: "Sunset", preview: true });
+  });
+
+  it("adds no preview when the caret is elsewhere", () => {
+    expect(collect(buildBlockDecorations(stateOf(doc, doc.length), true), doc)).toEqual([]);
   });
 });

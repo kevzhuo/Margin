@@ -136,15 +136,17 @@ export class ImageWidget extends WidgetType {
   constructor(
     readonly src: string,
     readonly alt: string,
+    /** Drawn under the image's source while the caret is on it. */
+    readonly preview = false,
   ) {
     super();
   }
   eq(other: ImageWidget) {
-    return other.src === this.src && other.alt === this.alt;
+    return other.src === this.src && other.alt === this.alt && other.preview === this.preview;
   }
   toDOM() {
-    const wrap = document.createElement("span");
-    wrap.className = "cm-md-image";
+    const wrap = document.createElement(this.preview ? "div" : "span");
+    wrap.className = this.preview ? "cm-md-image cm-md-image-preview" : "cm-md-image";
     const img = document.createElement("img");
     img.src = this.src;
     img.alt = this.alt;
@@ -157,7 +159,8 @@ export class ImageWidget extends WidgetType {
     return wrap;
   }
   ignoreEvent() {
-    return false;
+    // The rendered image takes clicks (they put the caret on it); the preview doesn't.
+    return this.preview;
   }
 }
 

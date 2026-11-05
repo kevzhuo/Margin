@@ -137,12 +137,32 @@ export function headingLevelAt(state: EditorState, pos: number): number {
   return m ? Number(m[1]) : 0;
 }
 
+/**
+ * Start a `$$` math block: on the caret's line if it's empty, otherwise on a
+ * new line after it, with the caret inside ready for TeX.
+ */
+export const insertMathBlock: Command = (view) => {
+  const line = view.state.doc.lineAt(view.state.selection.main.head);
+  const empty = line.text.trim() === "";
+  const from = empty ? line.from : line.to;
+  const insert = empty ? "$$\n\n$$" : "\n$$\n\n$$";
+  view.dispatch({
+    changes: { from, to: line.to, insert },
+    selection: { anchor: from + insert.indexOf("\n\n") + 1 },
+    scrollIntoView: true,
+    userEvent: "input",
+  });
+  return true;
+};
+
 export const formattingKeymap: KeyBinding[] = [
   { key: "Mod-b", run: toggleInline("**") },
   { key: "Mod-i", run: toggleInline("*") },
   { key: "Mod-e", run: toggleInline("`") },
   { key: "Mod-Shift-x", run: toggleInline("~~") },
   { key: "Mod-k", run: insertLink },
+  { key: "Mod-Shift-m", run: toggleInline("$") },
+  { key: "Mod-Alt-b", run: insertMathBlock },
   { key: "Mod-Enter", run: toggleTask },
   { key: "Mod-Shift-.", run: toggleBlockquote },
   { key: "Mod-1", run: setHeading(1) },

@@ -74,7 +74,14 @@ export interface VaultBackend {
    */
   watch(root: string, onEvent: (event: WatchEvent) => void): Promise<() => void>;
 
-  /** Resolve a relative image path in a note to something an <img> can load. */
+  /**
+   * Save a file (an image added to a note) as `<dir>/<name>`, creating the
+   * folder if needed and never overwriting: a taken name becomes "name 2.png",
+   * "name 3.png"… Resolves to the saved path.
+   */
+  saveAttachment(dir: string, name: string, data: Uint8Array): Promise<string>;
+
+  /** Resolve an image path in a note (relative or absolute) to something an <img> can load. */
   resolveAsset(notePath: string, src: string): string;
 
   openExternal(url: string): Promise<void>;
@@ -153,6 +160,26 @@ export function resolveRelative(fromDir: string, href: string): string | null {
     stack.push(piece);
   }
   return lead + stack.join(sep);
+}
+
+/**
+ * The file an image link in a note points at, as an absolute path: relative
+ * links resolve against the note's folder, `%20`-style escapes are decoded and
+ * `<…>` destinations unwrapped. Null for web, data and blob URLs, which load
+ * as they are.
+ */
+export function assetPath(notePath: string, src: string): string | null {
+  const link = src.trim().replace(/^<(.*)>$/, "$1");
+  const isUrl = /^[a-z][a-z0-9+.-]*:/i.test(link) && !/^[a-zA-Z]:[\\/]/.test(link);
+  if (!link || isUrl) return null;
+  if (/^([a-zA-Z]:[\\/]|\/|\\\\)/.test(link)) {
+    try {
+      return decodeURIComponent(link);
+    } catch {
+      return link;
+    }
+  }
+  return resolveRelative(dirname(notePath), link);
 }
 
 /** GitHub-style heading slug, used for `[text](#heading)` links. */

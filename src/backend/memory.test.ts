@@ -115,6 +115,27 @@ describe("misc", () => {
   });
 });
 
+describe("attachments", () => {
+  it("saves images without overwriting and resolves links to them", async () => {
+    const dir = `${R}/attachments`;
+    const first = await backend.saveAttachment(dir, "Sunset photo.png", new Uint8Array([1, 2, 3]));
+    const second = await backend.saveAttachment(dir, "Sunset photo.png", new Uint8Array([4]));
+    expect(first).toBe(`${R}/attachments/Sunset photo.png`);
+    expect(second).toBe(`${R}/attachments/Sunset photo 2.png`);
+    const note = `${R}/Projects/Trip.md`;
+    expect(backend.resolveAsset(note, "../attachments/Sunset%20photo.png")).not.toBe("../attachments/Sunset%20photo.png");
+    expect(backend.resolveAsset(note, "../attachments/Sunset%20photo.png")).toBe(backend.resolveAsset(`${R}/Top.md`, "attachments/Sunset photo.png"));
+    expect(backend.resolveAsset(note, "../attachments/missing.png")).toBe("../attachments/missing.png");
+  });
+
+  it("cleans names and keeps images out of the note tree", async () => {
+    const saved = await backend.saveAttachment(`${R}/attachments`, "../../escape.png", new Uint8Array([1]));
+    expect(saved).toBe(`${R}/attachments/escape.png`);
+    const names = flattenFiles(await backend.listTree(R)).map((f) => f.name);
+    expect(names).not.toContain("escape.png");
+  });
+});
+
 describe("folders and search", () => {
   const R = "/Demo Vault";
 

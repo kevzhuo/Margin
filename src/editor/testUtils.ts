@@ -1,6 +1,7 @@
 import { EditorSelection, EditorState } from "@codemirror/state";
 import type { DecorationSet } from "@codemirror/view";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
+import { mathSyntax } from "./mathSyntax";
 import { languages } from "@codemirror/language-data";
 import { livePreview } from "./livePreview";
 
@@ -12,7 +13,7 @@ export function stateOf(doc: string, selection?: number | { anchor: number; head
   return EditorState.create({
     doc,
     selection: sel,
-    extensions: [markdown({ base: markdownLanguage, codeLanguages: languages }), livePreview()],
+    extensions: [markdown({ base: markdownLanguage, codeLanguages: languages, extensions: [mathSyntax] }), livePreview()],
   });
 }
 

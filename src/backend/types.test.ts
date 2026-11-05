@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { findMatch, isWithin, resolveRelative, slugify } from "./types";
+import { assetPath, findMatch, isWithin, resolveRelative, slugify } from "./types";
 
 describe("resolveRelative", () => {
   it("resolves sibling, child and parent paths", () => {
@@ -45,5 +45,30 @@ describe("helpers", () => {
     expect(isWithin("/a/b", "/a/b")).toBe(true);
     expect(isWithin("/a/bc.md", "/a/b")).toBe(false);
     expect(isWithin("C:\\a\\b\\c.md", "C:\\a\\b")).toBe(true);
+  });
+});
+
+describe("assetPath", () => {
+  const note = "/Vault/Projects/Trip.md";
+
+  it("resolves relative image links against the note's folder", () => {
+    expect(assetPath(note, "../attachments/Sunset%20photo.png")).toBe("/Vault/attachments/Sunset photo.png");
+    expect(assetPath(note, "photo.png")).toBe("/Vault/Projects/photo.png");
+    expect(assetPath(note, "<../attachments/Sunset photo.png>")).toBe("/Vault/attachments/Sunset photo.png");
+  });
+
+  it("normalizes .. so a link can't hide where it points", () => {
+    expect(assetPath(note, "../../../etc/passwd")).toBe("/etc/passwd");
+  });
+
+  it("keeps absolute paths, decoded", () => {
+    expect(assetPath(note, "/Users/me/Pictures/a%20b.png")).toBe("/Users/me/Pictures/a b.png");
+    expect(assetPath("C:\\Vault\\Trip.md", "C:\\Pictures\\a.png")).toBe("C:\\Pictures\\a.png");
+  });
+
+  it("leaves web, data and blob URLs to load as they are", () => {
+    for (const src of ["https://example.com/a.png", "data:image/png;base64,AAAA", "blob:http://x/1", "asset://localhost/a"]) {
+      expect(assetPath(note, src)).toBeNull();
+    }
   });
 });

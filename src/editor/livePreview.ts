@@ -6,7 +6,7 @@
  *   - styles rendered content (headings, emphasis, code, links, quotes, lists)
  *   - hides delimiter tokens unless the caret is inside the element they belong to
  *   - swaps whole constructs for widgets (checkboxes, bullets, images, tables,
- *     horizontal rules, code-fence language labels)
+ *     math, horizontal rules, code-fence language labels)
  *
  * Layout stability rules (so nothing jumps when you click into a line):
  *   - heading size/weight come from line classes that apply in both states
@@ -29,6 +29,8 @@ import {
   type TableCell,
   type TableData,
 } from "./widgets";
+import { MathWidget } from "./mathRender";
+import { mathTex } from "./mathSyntax";
 
 export interface LivePreviewOptions {
   /** Turn an image `src` from the document into a loadable URL. */
@@ -96,6 +98,8 @@ const dim = markDeco("cm-md-mark");
 /** Revealed link syntax, which wraps with the text instead of staying on one line. */
 const linkDim = markDeco("cm-md-mark cm-md-link-syntax");
 const urlDim = markDeco("cm-md-mark cm-md-link-syntax cm-md-url");
+/** TeX source of inline math on the caret's line. */
+const mathSrc = markDeco("cm-md-math-src");
 const marginMark = markDeco("cm-md-mark cm-md-margin-mark");
 const lineDeco = (cls: string) => Decoration.line({ class: cls });
 
@@ -163,7 +167,7 @@ export interface BuildOptions {
   to?: number;
   /**
    * "widget" renders inactive tables as block widgets (whole-document builds,
-   * tests). "skip" leaves them to `tableField`, because view plugins may not
+   * tests). "skip" leaves them to `blockField`, because view plugins may not
    * provide block decorations.
    */
   tables?: "widget" | "skip";
@@ -242,7 +246,7 @@ export function buildDecorations(state: EditorState, focused = state.field(focus
 
   const insideCode = (pos: number): boolean => {
     for (let node: SyntaxNode | null = tree.resolveInner(pos, 1); node; node = node.parent) {
-      if (node.name === "FencedCode" || node.name === "CodeBlock" || node.name === "Table" || node.name === "HTMLBlock") return true;
+      if (node.name === "FencedCode" || node.name === "CodeBlock" || node.name === "Table" || node.name === "HTMLBlock" || node.name === "BlockMath") return true;
     }
     return false;
   };
@@ -376,6 +380,30 @@ export function buildDecorations(state: EditorState, focused = state.field(focus
             skipUntil = n.to;
             return false;
           }
+          return;
+        }
+
+        // Math: rendered by KaTeX away from the caret, TeX source at it.
+        // Blocks are drawn by the block field (buildBlockDecorations); here
+        // they only get their source styling.
+        case "InlineMath": {
+          if (touches(n.from, n.to)) {
+            out.push(mathSrc.range(n.from, n.to));
+            return;
+          }
+          const display = doc.sliceString(n.from, n.from + 2) === "$$";
+          out.push(Decoration.replace({ widget: new MathWidget(mathTex(n.node, doc), display, "inline") }).range(n.from, n.to));
+          return false;
+        }
+        case "BlockMath": {
+          const closed = n.node.getChildren("MathMark").length >= 2;
+          if (closed && !touches(n.from, n.to)) return false;
+          for (const from of lineRange(n.from, n.to)) if (from >= rangeFrom && from <= rangeTo) out.push(lineDeco("cm-md-math-line").range(from));
+          return;
+        }
+        case "MathMark": {
+          const parent = n.node.parent;
+          if (parent && touches(parent.from, parent.to)) out.push(dim.range(n.from, n.to));
           return;
         }
 
@@ -559,31 +587,65 @@ function treeChanged(a: EditorState, b: EditorState): boolean {
 }
 
 /** Containers a GFM table can sit inside; everything else is skipped when looking for tables. */
-const TABLE_CONTAINERS = new Set(["Document", "Blockquote", "BulletList", "OrderedList", "ListItem"]);
+const BLOCK_CONTAINERS = new Set(["Document", "Blockquote", "BulletList", "OrderedList", "ListItem"]);
 
 /**
  * Rendered tables are block widgets, which view plugins may not provide, so they
  * live in this field. It only walks block containers, so it stays cheap even in
  * long notes.
  */
-export function buildTableDecorations(state: EditorState, focused = state.field(focusedField, false) ?? true): DecorationSet {
+/**
+ * Block widgets: tables, and `$$` math blocks. They replace whole lines,
+ * which a view plugin may not do, so they live in a state field. Away from
+ * the caret a table or formula is drawn in place of its source; at the caret,
+ * a table shows its source and a formula shows its source with a live
+ * preview underneath. Exported for tests.
+ */
+export function buildBlockDecorations(state: EditorState, focused = state.field(focusedField, false) ?? true): DecorationSet {
   const doc = state.doc;
   const ranges = focused ? state.selection.ranges : [];
   const out: Range<Decoration>[] = [];
   syntaxTree(state).iterate({
     enter(n) {
-      if (n.name === "Table") {
+      if (n.name === "Table" || n.name === "BlockMath") {
         const active = ranges.some((r) => r.from <= n.to && r.to >= n.from);
-        if (!active) {
-          const first = doc.lineAt(n.from);
-          const last = doc.lineAt(n.to);
-          out.push(Decoration.replace({ widget: new TableWidget(parseTable(n.node, doc)), block: true }).range(first.from, last.to));
+        const first = doc.lineAt(n.from);
+        const last = doc.lineAt(n.to);
+        if (n.name === "Table") {
+          if (!active) out.push(Decoration.replace({ widget: new TableWidget(parseTable(n.node, doc)), block: true }).range(first.from, last.to));
+        } else {
+          const tex = mathTex(n.node, doc);
+          const closed = n.node.getChildren("MathMark").length >= 2;
+          if (active) out.push(Decoration.widget({ widget: new MathWidget(tex, true, "preview"), block: true, side: 1 }).range(last.to));
+          else if (closed) out.push(Decoration.replace({ widget: new MathWidget(tex, true, "block"), block: true }).range(first.from, last.to));
         }
         return false;
       }
-      return TABLE_CONTAINERS.has(n.name) ? undefined : false;
+      return BLOCK_CONTAINERS.has(n.name) ? undefined : false;
     },
   });
+  // An image at the caret shows its source, with the picture underneath so
+  // you can see what the link points at.
+  const resolveImage = state.facet(livePreviewConfig).resolveImage ?? ((s: string) => s);
+  const previewed = new Set<number>();
+  for (const r of ranges) {
+    const line = doc.lineAt(r.head);
+    syntaxTree(state).iterate({
+      from: line.from,
+      to: line.to,
+      enter(n) {
+        if (n.name === "Table" || n.name === "BlockMath" || n.name === "FencedCode") return false;
+        if (n.name !== "Image" || previewed.has(n.from) || r.from > n.to || r.to < n.from) return;
+        previewed.add(n.from);
+        const src = childText(n.node, "URL", doc);
+        if (!src) return false;
+        const marks = n.node.getChildren("LinkMark");
+        const alt = marks.length >= 2 ? doc.sliceString(marks[0].to, marks[1].from) : "";
+        out.push(Decoration.widget({ widget: new ImageWidget(resolveImage(src), alt, true), block: true, side: 1 }).range(doc.lineAt(n.to).to));
+        return false;
+      },
+    });
+  }
   return Decoration.set(out, true);
 }
 
@@ -592,10 +654,10 @@ const needsRebuild = (u: { docChanged: boolean; startState: EditorState; state: 
   u.transactions.some((tr) => !!tr.selection || tr.reconfigured || tr.effects.some((e) => e.is(setFocused))) ||
   treeChanged(u.startState, u.state);
 
-export const tableField = StateField.define<DecorationSet>({
-  create: (state) => buildTableDecorations(state),
+export const blockField = StateField.define<DecorationSet>({
+  create: (state) => buildBlockDecorations(state),
   update(deco, tr) {
-    if (needsRebuild({ docChanged: tr.docChanged, startState: tr.startState, state: tr.state, transactions: [tr] })) return buildTableDecorations(tr.state);
+    if (needsRebuild({ docChanged: tr.docChanged, startState: tr.startState, state: tr.state, transactions: [tr] })) return buildBlockDecorations(tr.state);
     return deco.map(tr.changes);
   },
   provide: (f) => EditorView.decorations.from(f),
@@ -640,5 +702,5 @@ export function linkHrefAt(target: EventTarget | null): string | null {
 }
 
 export function livePreview(options: LivePreviewOptions = {}): Extension {
-  return [livePreviewConfig.of(options), focusedField, focusTracker, focusReconciler, tableField, livePreviewPlugin];
+  return [livePreviewConfig.of(options), focusedField, focusTracker, focusReconciler, blockField, livePreviewPlugin];
 }

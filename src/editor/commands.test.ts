@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { EditorSelection, EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
-import { insertLink, setHeading, toggleBlockquote, toggleInline, toggleTask } from "./commands";
+import { insertLink, insertMathBlock, setHeading, toggleBlockquote, toggleInline, toggleTask } from "./commands";
 import { livePreview } from "./livePreview";
 
 let view: EditorView;
@@ -134,5 +134,30 @@ describe("toggleBlockquote", () => {
     expect(view.state.doc.toString()).toBe("> line");
     toggleBlockquote(view);
     expect(view.state.doc.toString()).toBe("line");
+  });
+});
+
+describe("insertMathBlock", () => {
+  it("starts a block on an empty line with the caret inside", () => {
+    const v = mount("Intro\n\n", 7);
+    insertMathBlock(v);
+    expect(v.state.doc.toString()).toBe("Intro\n\n$$\n\n$$");
+    expect(v.state.selection.main.head).toBe(10);
+  });
+
+  it("starts a block after a line with text, leaving the text whole", () => {
+    const v = mount("Some text", 4);
+    insertMathBlock(v);
+    expect(v.state.doc.toString()).toBe("Some text\n$$\n\n$$");
+    expect(v.state.doc.lineAt(v.state.selection.main.head).text).toBe("");
+    expect(v.state.selection.main.head).toBe(13);
+  });
+});
+
+describe("toggleInline with $", () => {
+  it("wraps a selection as inline math", () => {
+    const v = mount("pi r^2", 0, 6);
+    toggleInline("$")(v);
+    expect(v.state.doc.toString()).toBe("$pi r^2$");
   });
 });

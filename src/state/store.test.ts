@@ -509,3 +509,40 @@ describe("title and file name sync", () => {
     expect(store.getState().tree.some((n) => n.children?.some((c) => c.name === "Quick switch.md"))).toBe(true);
   });
 });
+
+describe("images", () => {
+  const png = (name: string, size = 3) => new File([new Uint8Array(size)], name, { type: "image/png" });
+
+  it("saves images to the attachments folder and links them relative to the note", async () => {
+    const store = await fresh();
+    await store.getState().openNote(DESIGN);
+    const snippets = await store.getState().saveImages([png("Sunset photo.png"), png("image.png")]);
+    expect(snippets[0]).toBe("![Sunset photo](../attachments/Sunset%20photo.png)");
+    expect(snippets[1]).toMatch(/^!\[\]\(\.\.\/attachments\/Pasted%20image%20\d{4}-\d\d-\d\d%20at%20\d\d\.\d\d\.\d\d\.png\)$/);
+    // The link resolves to the saved image.
+    const src = "../attachments/Sunset%20photo.png";
+    expect(backend.resolveAsset(DESIGN, src)).not.toBe(src);
+  });
+
+  it("links from a note at the vault root without ../", async () => {
+    const store = await fresh();
+    await store.getState().openNote(`${R}/Inbox.md`);
+    expect(await store.getState().saveImages([png("a.png")])).toEqual(["![a](attachments/a.png)"]);
+  });
+
+  it("skips files that aren't images, and refuses ones that are too large", async () => {
+    const store = await fresh();
+    await store.getState().openNote(DESIGN);
+    const huge = png("huge.png");
+    Object.defineProperty(huge, "size", { value: 200 * 1024 * 1024 });
+    const pdf = new File([new Uint8Array(1)], "notes.pdf", { type: "application/pdf" });
+    expect(await store.getState().saveImages([pdf, huge])).toEqual([]);
+    expect(store.getState().toasts.map((t) => t.message)).toEqual(["huge.png is too large to add (over 100 MB)."]);
+  });
+
+  it("needs an open note", async () => {
+    const store = await fresh();
+    store.setState({ activePath: null });
+    expect(await store.getState().saveImages([png("a.png")])).toEqual([]);
+  });
+});

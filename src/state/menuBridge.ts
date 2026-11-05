@@ -1,5 +1,6 @@
 import type { EditorView } from "@codemirror/view";
-import { insertLink, setHeading, toggleBlockquote, toggleInline, toggleTask } from "../editor/commands";
+import { insertLink, insertMathBlock, setHeading, toggleBlockquote, toggleInline, toggleTask } from "../editor/commands";
+import { pickImages } from "../editor/images";
 import { appCommands } from "./appCommands";
 import { useStore } from "./store";
 
@@ -10,6 +11,9 @@ const FORMAT: Record<string, (view: EditorView) => boolean> = {
   "format.strike": toggleInline("~~"),
   "format.code": toggleInline("`"),
   "format.link": insertLink,
+  "format.math": toggleInline("$"),
+  "insert.mathBlock": insertMathBlock,
+  "insert.image": (view) => pickImages(view, view.state.selection.main.head),
   "format.h1": setHeading(1),
   "format.h2": setHeading(2),
   "format.h3": setHeading(3),

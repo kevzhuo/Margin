@@ -14,6 +14,7 @@ import {
 } from "../backend";
 import type { Heading } from "../editor/outline";
 import { fileNameFromTitle, isPlaceholderName, replaceTitle, titleFromDoc } from "./title";
+import { ATTACHMENTS_DIR, MAX_ATTACHMENT_BYTES, attachmentName, imageMarkdown, isImageFile, relativePath } from "./attachments";
 
 export type ThemePref = "system" | "light" | "dark";
 export type SaveState = "idle" | "saving" | "saved" | "error";
@@ -206,6 +207,12 @@ export interface AppState {
   /** With a name, the note is created under that name; without one it starts as "Untitled" in rename mode. */
   createNote(dir?: string, name?: string): Promise<string | null>;
   createFolder(dir?: string): Promise<string | null>;
+  /**
+   * Copy images into the vault's attachments folder and return the Markdown
+   * that embeds each one in the open note. Files that aren't images, or are
+   * too large, are skipped with a message.
+   */
+  saveImages(files: File[]): Promise<string[]>;
   /** `updateHeading: false` skips retitling the note (used when the title itself drove the rename). */
   renamePath(path: string, newName: string, opts?: { updateHeading?: boolean }): Promise<void>;
   /** Rename the open note after its title if the two were in sync. Runs automatically after edits. */
@@ -657,6 +664,28 @@ export const useStore = create<AppState>((set, get) => {
         fail("Could not create a note", e);
         return null;
       }
+    },
+
+    async saveImages(files) {
+      const { backend, vaultRoot, activePath } = get();
+      if (!backend || !vaultRoot || !activePath) return [];
+      const snippets: string[] = [];
+      const now = new Date();
+      for (const file of files) {
+        if (!isImageFile(file)) continue;
+        if (file.size > MAX_ATTACHMENT_BYTES) {
+          get().pushToast(`${file.name || "That image"} is too large to add (over ${MAX_ATTACHMENT_BYTES / 1024 / 1024} MB).`, "error");
+          continue;
+        }
+        try {
+          const data = new Uint8Array(await file.arrayBuffer());
+          const saved = await backend.saveAttachment(joinPath(vaultRoot, ATTACHMENTS_DIR), attachmentName(file, now), data);
+          snippets.push(imageMarkdown(relativePath(dirname(activePath), saved), basename(saved)));
+        } catch (e) {
+          fail("Could not add the image", e);
+        }
+      }
+      return snippets;
     },
 
     async createFolder(dir) {

@@ -26,6 +26,8 @@ tauri-plugin-window-state = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 notify = "8"
+# Decodes the percent-encoded headers of save_attachment.
+percent-encoding = "2"
 trash = "5"
 
 [dev-dependencies]

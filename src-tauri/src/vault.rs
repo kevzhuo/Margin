@@ -13,10 +13,14 @@
 //! delete_path(path)          -> void       (moves to the system trash)
 //! watch_vault(root)          -> void       (emits "vault://changed")
 //! unwatch_vault()            -> void
+//! save_attachment(bytes)     -> string     (raw body; headers x-dir and x-name,
+//!                                           percent-encoded; new absolute path)
 //! ```
 //!
 //! Every path argument must resolve to a location inside the current vault
 //! root (set by `list_tree` or `watch_vault`); anything else is rejected.
+//! Opening a vault also lets the webview load images from it, and only from
+//! it, through the asset protocol.
 
 use std::cmp::Ordering;
 use std::collections::HashMap;
@@ -30,8 +34,10 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use notify::event::ModifyKind;
 use notify::{EventKind, RecommendedWatcher, RecursiveMode, Watcher};
+use percent_encoding::percent_decode_str;
 use serde::Serialize;
-use tauri::{AppHandle, Emitter, State};
+use tauri::ipc::{InvokeBody, Request};
+use tauri::{AppHandle, Emitter, Manager, State};
 
 /// How long after our own write we ignore watcher events for that path.
 const SUPPRESS_WINDOW: Duration = Duration::from_millis(1500);
@@ -356,6 +362,90 @@ pub fn create_note_in(dir: &Path, name: &str) -> Result<PathBuf, String> {
     Ok(candidate)
 }
 
+/// Folder at the vault root that pasted and dropped images are saved to.
+pub const ATTACHMENTS_DIR: &str = "attachments";
+
+/// Make an attachment's file name safe: no separators or characters Windows
+/// rejects, no leading dot (hidden), at most 120 characters, extension kept.
+pub fn clean_attachment_name(name: &str) -> Result<String, String> {
+    // Whitespace (tabs, newlines) collapses to single spaces first, so only
+    // the remaining control characters become hyphens.
+    let collapsed: String = name
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .chars()
+        .map(|c| match c {
+            '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|' => '-',
+            c if c.is_control() => '-',
+            c => c,
+        })
+        .collect();
+    let mut clean = collapsed
+        .trim_start_matches(|c: char| c == '.' || c == '-' || c.is_whitespace())
+        .to_string();
+    if clean.chars().count() > 120 {
+        let ext = match clean.rfind('.') {
+            Some(dot) if dot > 0 && clean.len() - dot <= 6 => clean[dot..].to_string(),
+            _ => String::new(),
+        };
+        let keep = 120 - ext.chars().count();
+        clean = clean
+            .chars()
+            .take(keep)
+            .collect::<String>()
+            .trim_end()
+            .to_string()
+            + &ext;
+    }
+    if clean.is_empty() {
+        return Err("The image needs a file name".to_string());
+    }
+    Ok(clean)
+}
+
+/// Save `data` as `<dir>/<name>`, creating `dir` if needed and never
+/// overwriting: a taken name becomes `<stem> 2.<ext>`, `<stem> 3.<ext>`, ...
+pub fn save_attachment_in(dir: &Path, name: &str, data: &[u8]) -> Result<PathBuf, String> {
+    let name = clean_attachment_name(name)?;
+    fs::create_dir_all(dir).map_err(|e| io_err("Could not create the attachments folder", e))?;
+    let (stem, ext) = match name.rfind('.') {
+        Some(dot) if dot > 0 => (&name[..dot], &name[dot..]),
+        _ => (name.as_str(), ""),
+    };
+    let mut candidate = dir.join(&name);
+    for i in 2..=10_001u32 {
+        match fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&candidate)
+        {
+            Ok(mut file) => {
+                if let Err(e) = file.write_all(data).and_then(|_| file.sync_all()) {
+                    let _ = fs::remove_file(&candidate);
+                    return Err(io_err("Could not save the image", e));
+                }
+                return Ok(candidate);
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+                candidate = dir.join(format!("{stem} {i}{ext}"));
+            }
+            Err(e) => return Err(io_err("Could not save the image", e)),
+        }
+    }
+    Err("Too many images with that name".to_string())
+}
+
+/// The attachments folder holds images, not notes, so the sidebar hides it
+/// while it has no notes in it.
+pub fn hide_attachments_folder(nodes: &mut Vec<FileNode>) {
+    nodes.retain(|n| {
+        !(n.kind == "dir"
+            && n.name == ATTACHMENTS_DIR
+            && n.children.as_ref().map_or(true, |c| c.is_empty()))
+    });
+}
+
 /// Create `<dir>/<name>`, de-duplicating as `<name> 2`, `<name> 3`, ...
 pub fn create_folder_in(dir: &Path, name: &str) -> Result<PathBuf, String> {
     if !dir.is_dir() {
@@ -583,10 +673,27 @@ fn start_watcher(
 // ---------------------------------------------------------------------------
 // Commands
 
+/// Let the webview load images from the vault, and nowhere else: the asset
+/// protocol's scope starts empty (tauri.conf.json).
+fn allow_assets(app: &AppHandle, given: &Path, canonical: &Path) {
+    let scope = app.asset_protocol_scope();
+    let _ = scope.allow_directory(canonical, true);
+    if given != canonical {
+        let _ = scope.allow_directory(given, true);
+    }
+}
+
 #[tauri::command]
-pub fn list_tree(root: String, state: State<'_, VaultState>) -> Result<Vec<FileNode>, String> {
+pub fn list_tree(
+    root: String,
+    app: AppHandle,
+    state: State<'_, VaultState>,
+) -> Result<Vec<FileNode>, String> {
     let canonical = state.set_root(Path::new(&root))?;
-    list_tree_at(&canonical)
+    allow_assets(&app, Path::new(&root), &canonical);
+    let mut nodes = list_tree_at(&canonical)?;
+    hide_attachments_folder(&mut nodes);
+    Ok(nodes)
 }
 
 #[tauri::command]
@@ -671,9 +778,42 @@ pub fn watch_vault(
     state: State<'_, VaultState>,
 ) -> Result<(), String> {
     let canonical = state.set_root(Path::new(&root))?;
+    allow_assets(&app, Path::new(&root), &canonical);
     let handle = start_watcher(app, canonical, state.recent_writes.clone())?;
     *state.watcher.lock().unwrap() = Some(handle);
     Ok(())
+}
+
+fn header(request: &Request<'_>, key: &str) -> Result<String, String> {
+    let raw = request
+        .headers()
+        .get(key)
+        .ok_or_else(|| format!("Missing {key}"))?
+        .to_str()
+        .map_err(|e| io_err("Bad header", e))?;
+    percent_decode_str(raw)
+        .decode_utf8()
+        .map(|s| s.into_owned())
+        .map_err(|e| io_err("Bad header", e))
+}
+
+/// Save an image into the vault. The bytes arrive as the raw request body
+/// (no JSON encoding, so large photos stay fast); the folder and file name
+/// come in the `x-dir` and `x-name` headers.
+#[tauri::command]
+pub fn save_attachment(
+    request: Request<'_>,
+    state: State<'_, VaultState>,
+) -> Result<String, String> {
+    let InvokeBody::Raw(data) = request.body() else {
+        return Err("Expected the image's bytes".to_string());
+    };
+    let dir = state.resolve(&header(&request, "x-dir")?)?;
+    if dir.is_file() {
+        return Err("Attachments must go in a folder".to_string());
+    }
+    let saved = save_attachment_in(&dir, &header(&request, "x-name")?, data)?;
+    Ok(display_path(&saved))
 }
 
 #[tauri::command]
@@ -933,5 +1073,68 @@ mod tests {
         let mut v = vec!["b.md", "A.md", "a10.md", "a2.md"];
         v.sort_by(|a, b| natural_cmp(a, b));
         assert_eq!(v, vec!["A.md", "a2.md", "a10.md", "b.md"]);
+    }
+
+    #[test]
+    fn saves_attachments_without_overwriting() {
+        let tmp = tempdir().unwrap();
+        let dir = tmp.path().join(ATTACHMENTS_DIR);
+        let first = save_attachment_in(&dir, "photo.png", b"one").unwrap();
+        let second = save_attachment_in(&dir, "photo.png", b"two").unwrap();
+        let third = save_attachment_in(&dir, "photo.png", b"three").unwrap();
+        assert_eq!(first.file_name().unwrap(), "photo.png");
+        assert_eq!(second.file_name().unwrap(), "photo 2.png");
+        assert_eq!(third.file_name().unwrap(), "photo 3.png");
+        assert_eq!(fs::read(&first).unwrap(), b"one");
+        assert_eq!(fs::read(&second).unwrap(), b"two");
+        let no_ext = save_attachment_in(&dir, "scan", b"x").unwrap();
+        let no_ext_2 = save_attachment_in(&dir, "scan", b"y").unwrap();
+        assert_eq!(no_ext.file_name().unwrap(), "scan");
+        assert_eq!(no_ext_2.file_name().unwrap(), "scan 2");
+    }
+
+    #[test]
+    fn attachment_names_cannot_escape_or_hide() {
+        assert_eq!(
+            clean_attachment_name("../../etc/passwd").unwrap(),
+            "etc-passwd"
+        );
+        assert_eq!(
+            clean_attachment_name("a/b\\c:d.png").unwrap(),
+            "a-b-c-d.png"
+        );
+        assert_eq!(clean_attachment_name(".hidden.png").unwrap(), "hidden.png");
+        assert_eq!(
+            clean_attachment_name("  two   spaces .png ").unwrap(),
+            "two spaces .png"
+        );
+        assert!(clean_attachment_name("...").is_err());
+        assert!(clean_attachment_name("").is_err());
+        let long = format!("{}.jpeg", "x".repeat(300));
+        let clean = clean_attachment_name(&long).unwrap();
+        assert_eq!(clean.chars().count(), 120);
+        assert!(clean.ends_with(".jpeg"));
+
+        let tmp = tempdir().unwrap();
+        let saved = save_attachment_in(tmp.path(), "../outside.png", b"x").unwrap();
+        assert_eq!(saved.parent().unwrap(), tmp.path());
+    }
+
+    #[test]
+    fn hides_the_attachments_folder_until_it_holds_notes() {
+        let tmp = tempdir().unwrap();
+        let root = tmp.path();
+        fs::create_dir(root.join(ATTACHMENTS_DIR)).unwrap();
+        fs::write(root.join(ATTACHMENTS_DIR).join("photo.png"), "x").unwrap();
+        fs::create_dir(root.join("Empty")).unwrap();
+        fs::write(root.join("Note.md"), "n").unwrap();
+        let mut tree = list_tree_at(root).unwrap();
+        hide_attachments_folder(&mut tree);
+        assert_eq!(names(&tree), vec!["Empty", "Note.md"]);
+
+        fs::write(root.join(ATTACHMENTS_DIR).join("About images.md"), "n").unwrap();
+        let mut tree = list_tree_at(root).unwrap();
+        hide_attachments_folder(&mut tree);
+        assert_eq!(names(&tree), vec!["attachments", "Empty", "Note.md"]);
     }
 }

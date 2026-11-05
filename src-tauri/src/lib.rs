@@ -59,6 +59,7 @@ pub fn run() {
             vault::delete_path,
             vault::watch_vault,
             vault::unwatch_vault,
+            vault::save_attachment,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Margin");

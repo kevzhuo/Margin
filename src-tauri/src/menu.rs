@@ -76,6 +76,7 @@ pub const FORMAT: &[Item] = &[
     ("format.strike", "Strikethrough", Some("Shift+CmdOrCtrl+X")),
     ("format.code", "Inline Code", Some("CmdOrCtrl+E")),
     ("format.link", "Link", Some("CmdOrCtrl+K")),
+    ("format.math", "Inline Math", Some("Shift+CmdOrCtrl+M")),
 ];
 
 pub const BLOCKS: &[Item] = &[
@@ -85,6 +86,8 @@ pub const BLOCKS: &[Item] = &[
     ("format.paragraph", "Body Text", Some("CmdOrCtrl+0")),
     ("format.task", "Toggle Task", Some("CmdOrCtrl+Enter")),
     ("format.quote", "Quote", Some("Shift+CmdOrCtrl+Period")),
+    ("insert.mathBlock", "Math Block", Some("Alt+CmdOrCtrl+B")),
+    ("insert.image", "Image…", None),
 ];
 
 pub const APP: &[Item] = &[("settings.open", "Settings…", Some("CmdOrCtrl+Comma"))];

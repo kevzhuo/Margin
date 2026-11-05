@@ -1,4 +1,6 @@
+import { sanitizeFileName } from "../state/attachments";
 import {
+  assetPath,
   basename,
   dirname,
   flattenFiles,
@@ -168,6 +170,8 @@ export class MemoryBackend implements VaultBackend {
   private files: Record<string, string>;
   private dirs: Set<string>;
   private listeners = new Set<(e: WatchEvent) => void>();
+  /** Saved images: path to an object URL. Kept in memory only; images are too big for localStorage. */
+  private assets = new Map<string, string>();
 
   constructor(initial?: Record<string, string>, initialDirs: string[] = []) {
     if (initial) {
@@ -346,8 +350,22 @@ export class MemoryBackend implements VaultBackend {
     return () => this.listeners.delete(onEvent);
   }
 
-  resolveAsset(_notePath: string, src: string): string {
-    return src;
+  async saveAttachment(dir: string, name: string, data: Uint8Array): Promise<string> {
+    const clean = sanitizeFileName(name);
+    if (!clean) throw new Error("The image needs a file name");
+    const dot = clean.lastIndexOf(".");
+    const stem = dot > 0 ? clean.slice(0, dot) : clean;
+    const ext = dot > 0 ? clean.slice(dot) : "";
+    let candidate = joinPath(dir, clean);
+    for (let i = 2; this.assets.has(candidate) || this.files[candidate] !== undefined; i++) candidate = joinPath(dir, `${stem} ${i}${ext}`);
+    const url = typeof URL.createObjectURL === "function" ? URL.createObjectURL(new Blob([data.slice()])) : `memory:${candidate}`;
+    this.assets.set(candidate, url);
+    return candidate;
+  }
+
+  resolveAsset(notePath: string, src: string): string {
+    const path = assetPath(notePath, src);
+    return (path && this.assets.get(path)) ?? src;
   }
 
   async openExternal(url: string): Promise<void> {

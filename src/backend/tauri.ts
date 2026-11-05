@@ -2,7 +2,7 @@ import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
-import { dirname, type FileNode, type SearchHit, type VaultBackend, type WatchEvent } from "./types";
+import { assetPath, type FileNode, type SearchHit, type VaultBackend, type WatchEvent } from "./types";
 
 /**
  * Rust command contract (see src-tauri/src/vault.rs):
@@ -74,12 +74,17 @@ export class TauriBackend implements VaultBackend {
     };
   }
 
+  async saveAttachment(dir: string, name: string, data: Uint8Array): Promise<string> {
+    // The bytes go as the raw request body; JSON would turn a photo into a
+    // huge array of numbers. Headers must be ASCII, so the paths are encoded.
+    return invoke<string>("save_attachment", data, {
+      headers: { "x-dir": encodeURIComponent(dir), "x-name": encodeURIComponent(name) },
+    });
+  }
+
   resolveAsset(notePath: string, src: string): string {
-    if (/^(https?:|data:|asset:|blob:)/i.test(src)) return src;
-    const dir = dirname(notePath);
-    const sep = dir.includes("\\") && !dir.includes("/") ? "\\" : "/";
-    const abs = /^([a-zA-Z]:[\\/]|\/)/.test(src) ? src : dir + sep + src.replace(/^\.\//, "");
-    return convertFileSrc(abs);
+    const path = assetPath(notePath, src);
+    return path ? convertFileSrc(path) : src;
   }
 
   async openExternal(url: string): Promise<void> {

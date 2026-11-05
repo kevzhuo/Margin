@@ -70,3 +70,22 @@ describe("applying a block item", () => {
     expect(v.state.selection.main.head).toBe(4);
   });
 });
+
+describe("math and image items", () => {
+  it("/math starts a block with the caret inside", () => {
+    const v = run("/math", 5, "Math");
+    expect(v.state.doc.toString()).toBe("$$\n\n$$");
+    expect(v.state.selection.main.head).toBe(3);
+  });
+
+  it("/image falls back to a link template when images can't be saved", () => {
+    const v = run("/image", 6, "Image");
+    expect(v.state.doc.toString()).toBe("![](url)");
+  });
+
+  it("/image link puts the caret where the URL goes", () => {
+    const v = run("/image link", 11, "Image link");
+    expect(v.state.doc.toString()).toBe("![]()");
+    expect(v.state.selection.main.head).toBe(4);
+  });
+});

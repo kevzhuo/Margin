@@ -125,6 +125,7 @@ export function EditorPane() {
     },
     onUpdate,
     onOpenLink: openLink,
+    onImages: (files) => useStore.getState().saveImages(files),
     onNavigate: (direction) => {
       const s = useStore.getState();
       void (direction < 0 ? s.goBack() : s.goForward());

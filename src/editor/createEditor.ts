@@ -3,6 +3,7 @@ import { EditorView, drawSelection, dropCursor, keymap, placeholder, rectangular
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
 import { searchKeymap, search } from "@codemirror/search";
 import { markdown, markdownLanguage, markdownKeymap } from "@codemirror/lang-markdown";
+import { mathSyntax } from "./mathSyntax";
 import { languages } from "@codemirror/language-data";
 import { indentUnit } from "@codemirror/language";
 import { closeBrackets, closeBracketsKeymap } from "@codemirror/autocomplete";
@@ -16,6 +17,7 @@ import { wrapSelectionOnType } from "./wrapSelection";
 import { jumpFlash } from "./flash";
 import { marginFit } from "./marginFit";
 import { scrollerClicks } from "./scrollerClicks";
+import { imageInput, type ImageSaver } from "./images";
 
 export interface EditorCallbacks {
   onDocChanged?: (doc: string, update: ViewUpdate) => void;
@@ -25,6 +27,8 @@ export interface EditorCallbacks {
   onNavigate?: (direction: -1 | 1) => boolean;
   /** Read on every update; true keeps the caret centered. */
   typewriter?: () => boolean;
+  /** Saves pasted, dropped or picked images; without it, images can't be added. */
+  onImages?: ImageSaver;
 }
 
 export interface CreateEditorOptions extends EditorCallbacks {
@@ -43,7 +47,7 @@ export function editorExtensions(opts: Omit<CreateEditorOptions, "parent" | "doc
     EditorView.lineWrapping,
     indentUnit.of("  "),
     search({ top: true }),
-    markdown({ base: markdownLanguage, codeLanguages: languages, addKeymap: false }),
+    markdown({ base: markdownLanguage, codeLanguages: languages, addKeymap: false, extensions: [mathSyntax] }),
     // Auto-close brackets only. Quotes and backticks would fight with prose
     // apostrophes and with typing ``` for a code fence.
     markdownLanguage.data.of({ closeBrackets: { brackets: ["(", "[", "{"] } }),
@@ -55,6 +59,7 @@ export function editorExtensions(opts: Omit<CreateEditorOptions, "parent" | "doc
     jumpFlash,
     marginFit,
     scrollerClicks,
+    imageInput(opts.onImages),
     slashMenu,
     bubbleToolbar(),
     placeholder("Type / for commands"),
