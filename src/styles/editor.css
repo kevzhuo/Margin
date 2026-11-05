@@ -163,12 +163,38 @@ html.focus-mode .editor-host .cm-editor.cm-focused .cm-line.cm-md-table-raw {
   font-size: 0.75em;
   line-height: 1;
 }
-/* Heading marks are drawn smaller than the heading so even "####" fits the
-   narrowest gutter. Each line-height is the heading's line-height divided by
-   the scale, so the mark's box matches the heading's first line and the mark
-   sits centered beside it. */
+/* Heading marks are drawn smaller than the heading. Each line-height is the
+   heading's line-height divided by the mark's font-size, so the mark's box
+   matches the heading's first line and the mark sits centered beside it. */
 .cm-md-heading .cm-md-margin-mark {
   font-weight: 500;
+}
+/* Marks too wide for a narrow margin are scaled down by the marginFit
+   plugin (src/editor/marginFit.ts), which sets one variable per kind. */
+.cm-md-margin-mark,
+.cm-md-checkbox .cm-md-ghost {
+  transform-origin: right center;
+}
+.cm-md-h1 .cm-md-margin-mark {
+  scale: var(--fit-h1, 1);
+}
+.cm-md-h2 .cm-md-margin-mark {
+  scale: var(--fit-h2, 1);
+}
+.cm-md-h3 .cm-md-margin-mark {
+  scale: var(--fit-h3, 1);
+}
+.cm-md-h4 .cm-md-margin-mark {
+  scale: var(--fit-h4, 1);
+}
+.cm-md-h5 .cm-md-margin-mark {
+  scale: var(--fit-h5, 1);
+}
+.cm-md-h6 .cm-md-margin-mark {
+  scale: var(--fit-h6, 1);
+}
+.cm-md-checkbox .cm-md-ghost {
+  scale: var(--fit-task, 1);
 }
 .cm-md-h1 .cm-md-margin-mark {
   top: 18px;

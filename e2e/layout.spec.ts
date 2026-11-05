@@ -11,9 +11,30 @@ const LIST_DOC = `# Layout check
 10. Tenth item keeps the same text column
 
 - [ ] An unfinished task that wraps onto a second line to check the checkbox indent
-
-#### Fourth-level heading
 `;
+
+const MARKS_DOC = `# Level one
+
+## Level two
+
+### Level three
+
+#### Level four
+
+##### Level five
+
+###### Level six
+
+- [ ] A task
+`;
+
+async function placeCaret(page: Page, text: string) {
+  await page.evaluate((t) => {
+    const view = window.__margin!.store.getState().editor!;
+    view.dispatch({ selection: { anchor: view.state.doc.toString().indexOf(t) + 2 }, scrollIntoView: true });
+    view.focus();
+  }, text);
+}
 
 async function loadDoc(page: Page, doc: string) {
   await page.evaluate(async (text) => {
@@ -110,20 +131,24 @@ test.describe("in a small window", () => {
     expect(await name.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
   });
 
-  test("heading marks fit inside the narrowest gutter", async ({ page }) => {
-    await loadDoc(page, LIST_DOC);
-    const scrollerLeft = (await page.locator(".cm-scroller").boundingBox())!.x;
-    for (const text of ["Layout check", "Fourth-level heading"]) {
-      await page.evaluate((t) => {
-        const view = window.__margin!.store.getState().editor!;
-        view.dispatch({ selection: { anchor: view.state.doc.toString().indexOf(t) + 2 }, scrollIntoView: true });
-        view.focus();
-      }, text);
-      const mark = page.locator(".cm-line", { hasText: text }).locator(".cm-md-margin-mark");
-      await expect(mark).toBeVisible();
-      expect((await mark.boundingBox())!.x).toBeGreaterThanOrEqual(scrollerLeft);
-    }
-  });
+  // DejaVu Sans stands in for a wide fallback font (Linux machines without
+  // Inter); its "#" is about 40% wider than SF Pro's or Inter's.
+  for (const font of ["the default font", "a wide font"]) {
+    test(`margin marks fit inside the narrowest gutter, in ${font}`, async ({ page }) => {
+      if (font === "a wide font") await page.evaluate(() => document.documentElement.style.setProperty("--font-editor-sans", '"DejaVu Sans"'));
+      await loadDoc(page, MARKS_DOC);
+      const scrollerLeft = (await page.locator(".cm-scroller").boundingBox())!.x;
+      for (const text of ["Level one", "Level two", "Level three", "Level four", "Level five", "Level six", "A task"]) {
+        await placeCaret(page, text);
+        const mark = page.locator(".cm-line", { hasText: text }).locator(".cm-md-margin-mark, .cm-md-ghost");
+        await expect(mark).toBeVisible();
+        await expect.poll(async () => (await mark.boundingBox())!.x, { message: text }).toBeGreaterThanOrEqual(scrollerLeft);
+      }
+      // A mark with room to spare is not shrunk.
+      await placeCaret(page, "Level one");
+      expect(await page.locator(".cm-md-h1 .cm-md-margin-mark").evaluate((el) => getComputedStyle(el).scale)).toMatch(/^(none|1)$/);
+    });
+  }
 
   test("wrapped list lines hang under their text, and nesting indents", async ({ page }) => {
     await loadDoc(page, LIST_DOC);

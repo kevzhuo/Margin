@@ -14,6 +14,7 @@ import { bubbleToolbar } from "./bubbleToolbar";
 import { typewriter } from "./typewriter";
 import { wrapSelectionOnType } from "./wrapSelection";
 import { jumpFlash } from "./flash";
+import { marginFit } from "./marginFit";
 
 export interface EditorCallbacks {
   onDocChanged?: (doc: string, update: ViewUpdate) => void;
@@ -51,6 +52,7 @@ export function editorExtensions(opts: Omit<CreateEditorOptions, "parent" | "doc
     codeHighlighting,
     livePreview(opts.preview ?? {}),
     jumpFlash,
+    marginFit,
     slashMenu,
     bubbleToolbar(),
     placeholder("Type / for commands"),
