@@ -4,6 +4,7 @@ import type { EditorView, ViewUpdate } from "@codemirror/view";
 import { createEditor, createEditorState, type CreateEditorOptions } from "../editor/createEditor";
 import { countWords, extractHeadings } from "../editor/outline";
 import { scrollToPos } from "../editor/scroll";
+import { flash } from "../editor/flash";
 import { dirname, findMatch, flattenFiles, resolveRelative, slugify } from "../backend";
 import { useStore, type Jump } from "../state/store";
 
@@ -19,9 +20,23 @@ function markTyping() {
   typingTimer = setTimeout(() => root.classList.remove("is-typing"), TYPING_IDLE_MS);
 }
 
+/** Outline and word count trail typing by a moment; neither needs every keystroke. */
+const DERIVED_DELAY_MS = 180;
+let derivedTimer: ReturnType<typeof setTimeout> | null = null;
+
+function scheduleDerived(view: EditorView) {
+  if (derivedTimer) clearTimeout(derivedTimer);
+  derivedTimer = setTimeout(() => {
+    derivedTimer = null;
+    const s = useStore.getState();
+    s.setHeadings(extractHeadings(view.state));
+    s.setWordCount(countWords(view.state.doc));
+  }, DERIVED_DELAY_MS);
+}
+
 function onUpdate(update: ViewUpdate) {
   const s = useStore.getState();
-  if (update.docChanged || update.viewportChanged) s.setHeadings(extractHeadings(update.state));
+  if (update.docChanged) scheduleDerived(update.view);
   if (update.selectionSet || update.docChanged) {
     const sel = update.state.selection.main;
     s.setCaret(sel.head);
@@ -56,7 +71,7 @@ function openLink(href: string) {
   }
 }
 
-function applyJump(view: EditorView, jump: Jump, smooth: boolean) {
+function applyJump(view: EditorView, jump: Jump, smooth: boolean, highlight = true) {
   const doc = view.state.doc;
   let anchor = Math.min(jump.pos ?? 0, doc.length);
   let head = anchor;
@@ -77,12 +92,14 @@ function applyJump(view: EditorView, jump: Jump, smooth: boolean) {
   view.dispatch({ selection: EditorSelection.single(anchor, head) });
   view.focus();
   scrollToPos(view, head, { align: "center", smooth });
+  if (highlight) flash(view, Math.min(anchor, head), Math.max(anchor, head));
 }
 
 export function EditorPane() {
   const hostRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const shownPath = useRef<string | null>(null);
+  const shownVersion = useRef(-1);
   const activePath = useStore((s) => s.activePath);
   const contentVersion = useStore((s) => s.contentVersion);
   const jumpVersion = useStore((s) => s.jumpVersion);
@@ -104,7 +121,6 @@ export function EditorPane() {
     },
     onDocChanged: (doc, update) => {
       useStore.getState().updateContent(doc);
-      useStore.getState().setWordCount(countWords(update.state.doc));
       if (update.transactions.some((tr) => tr.isUserEvent("input") || tr.isUserEvent("delete"))) markTyping();
     },
     onUpdate,
@@ -129,12 +145,24 @@ export function EditorPane() {
     const view = createEditor({ parent: hostRef.current, doc: "", ...options() });
     viewRef.current = view;
     useStore.getState().setEditor(view);
+    // A hairline appears under the top bar once the note is scrolled.
+    let frame = 0;
+    const onScroll = () => {
+      if (frame) return;
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        document.documentElement.classList.toggle("editor-scrolled", view.scrollDOM.scrollTop > 2);
+      });
+    };
+    view.scrollDOM.addEventListener("scroll", onScroll, { passive: true });
     const save = () => rememberView(shownPath.current);
     const onHide = () => document.visibilityState === "hidden" && save();
     window.addEventListener("beforeunload", save);
     document.addEventListener("visibilitychange", onHide);
     return () => {
       save();
+      view.scrollDOM.removeEventListener("scroll", onScroll);
+      document.documentElement.classList.remove("editor-scrolled");
       window.removeEventListener("beforeunload", save);
       document.removeEventListener("visibilitychange", onHide);
       view.destroy();
@@ -151,6 +179,13 @@ export function EditorPane() {
     if (!view) return;
     const s = useStore.getState();
     const previous = shownPath.current;
+    // A rename or move changes the path but not the document (contentVersion only
+    // moves on loads). Keep the editor, its caret and its undo history as they are.
+    if (previous && activePath && previous !== activePath && contentVersion === shownVersion.current) {
+      shownPath.current = activePath;
+      return;
+    }
+    shownVersion.current = contentVersion;
     const switching = previous !== activePath;
     const before = view.state.selection.main;
     const beforeScroll = view.scrollDOM.scrollTop;
@@ -167,7 +202,7 @@ export function EditorPane() {
     const jump = s.jump && s.jump.path === activePath ? s.jump : null;
     if (jump) {
       useStore.setState({ jump: null });
-      applyJump(view, jump, false);
+      applyJump(view, jump, false, jump.flash !== false);
     } else if (!switching) {
       // Reloaded from disk: keep the caret and scroll where they were.
       view.dispatch({ selection: EditorSelection.single(Math.min(before.anchor, len), Math.min(before.head, len)) });
@@ -196,7 +231,7 @@ export function EditorPane() {
     const jump = useStore.getState().jump;
     if (!view || !jump || jump.path !== shownPath.current) return;
     useStore.setState({ jump: null });
-    applyJump(view, jump, true);
+    applyJump(view, jump, true, jump.flash !== false);
   }, [jumpVersion]);
 
   // Text size, font, and measure change line heights: let CodeMirror re-measure.

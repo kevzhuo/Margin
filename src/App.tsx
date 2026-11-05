@@ -13,6 +13,8 @@ import { Toasts } from "./components/Toasts";
 import { noteTitle, outlineVisible, panelFits, sidebarVisible, useStore } from "./state/store";
 import { appCommands, matchesShortcut } from "./state/appCommands";
 import { prefersReducedMotion } from "./components/usePresence";
+import { connectMenu } from "./state/menuBridge";
+import { SwipeNavigation } from "./components/SwipeNavigation";
 
 const MEASURE = { narrow: "600px", medium: "720px", wide: "900px" } as const;
 const FONT_VAR = { sans: "var(--font-editor-sans)", serif: "var(--font-editor-serif)", mono: "var(--font-editor-mono)" } as const;
@@ -34,6 +36,13 @@ function useTheme() {
         timer = setTimeout(() => root.classList.remove("theme-transition"), 320);
       }
       root.dataset.theme = resolved;
+      // Off macOS the window is opaque: match its background to the theme so a
+      // resize never exposes a white edge in dark mode.
+      if (isTauri() && platform() !== "macos") {
+        void import("@tauri-apps/api/window")
+          .then(({ getCurrentWindow }) => getCurrentWindow().setBackgroundColor(resolved === "dark" ? "#191919" : "#ffffff"))
+          .catch(() => {});
+      }
     };
     apply();
     first.current = false;
@@ -54,6 +63,7 @@ function useAppearance() {
   const focusMode = useStore((s) => s.focusMode);
   const typewriter = useStore((s) => s.typewriter);
   const fullWidth = useStore((s) => s.fullWidth);
+  const smoothCaret = useStore((s) => s.smoothCaret);
   useEffect(() => {
     const root = document.documentElement;
     root.style.setProperty("--editor-font-size", `${fontSize}px`);
@@ -63,8 +73,9 @@ function useAppearance() {
     root.classList.toggle("focus-mode", focusMode);
     root.classList.toggle("typewriter", typewriter);
     root.classList.toggle("full-width", fullWidth);
+    root.classList.toggle("smooth-caret", smoothCaret);
     root.dataset.font = fontFamily;
-  }, [fontSize, fontFamily, lineWidth, sidebarWidth, focusMode, typewriter, fullWidth]);
+  }, [fontSize, fontFamily, lineWidth, sidebarWidth, focusMode, typewriter, fullWidth, smoothCaret]);
 }
 
 /**
@@ -165,7 +176,26 @@ export default function App() {
     root.classList.add(`platform-${platform()}`);
     if (isTauri() && platform() === "macos") root.classList.add("titlebar-overlay");
     void init();
+    let disconnect: (() => void) | null = null;
+    if (isTauri()) void connectMenu().then((d) => (disconnect = d));
+    return () => disconnect?.();
   }, [init]);
+
+  // The desktop window starts hidden; show it once the first real frame is painted.
+  useEffect(() => {
+    if (!ready || !isTauri()) return;
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        void import("@tauri-apps/api/window")
+          .then(async ({ getCurrentWindow }) => {
+            const win = getCurrentWindow();
+            await win.show();
+            await win.setFocus();
+          })
+          .catch(() => {});
+      }),
+    );
+  }, [ready]);
 
   useEffect(() => {
     const flush = () => void useStore.getState().flushSave();
@@ -188,6 +218,7 @@ export default function App() {
         <TopBar />
         {activePath ? <EditorPane /> : <EmptyState />}
         <StatusBar />
+        <SwipeNavigation />
       </main>
       <div className="outline-shell" data-open={outlineShown} data-overlay={!outlineFits || undefined} inert={!outlineShown || undefined}>
         <OutlinePanel />

@@ -69,19 +69,30 @@ test("quick switcher closes with Escape and the sidebar search button opens it",
   await expect(dialog).toBeHidden();
 });
 
-test("new note is created, opened and renamed inline", async ({ page }) => {
+test("a new note opens with its title selected, and typing names it", async ({ page }) => {
   await page.getByRole("button", { name: "New note", exact: true }).click();
   await expect.poll(() => activePath(page)).toMatch(/\/Untitled\.md$/);
-  await expect(page.locator(".cm-line.cm-md-h1")).toHaveText("Untitled");
-  const input = page.locator(".rename-input");
-  await expect(input).toBeFocused();
-  await expect(input).toHaveValue("Untitled");
-  await input.fill("My first note");
-  await input.press("Enter");
-  await expect(input).toHaveCount(0);
+  await expect(page.locator(".rename-input")).toHaveCount(0);
+  // The placeholder title is selected, so typing replaces it.
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const s = window.__margin!.store.getState().editor!.state;
+        return s.sliceDoc(s.selection.main.from, s.selection.main.to);
+      }),
+    )
+    .toBe("Untitled");
+  await page.keyboard.type("My first note");
+  await expect(page.locator(".cm-line.cm-md-h1")).toContainText("My first note");
+  // After a pause the file follows the title, without reloading the editor.
   await expect.poll(() => activePath(page)).toMatch(/\/My first note\.md$/);
   await expect(page.locator(".tree-row.selected")).toHaveText("My first note");
   await expect(page.locator(".crumb.current")).toContainText("My first note");
+  await page.keyboard.type("s");
+  await expect(page.locator(".cm-line.cm-md-h1")).toContainText("My first notes");
+  // Undo history survived the rename.
+  await page.keyboard.press("Control+z");
+  await expect(page.locator(".cm-line.cm-md-h1")).not.toContainText("notes");
 });
 
 test("notes can be renamed and deleted from the context menu", async ({ page }) => {

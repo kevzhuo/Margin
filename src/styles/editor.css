@@ -120,6 +120,14 @@ html.focus-mode .editor-host .cm-editor.cm-focused .cm-line.cm-md-table-raw {
 .cm-md-heading {
   font-weight: 700;
   letter-spacing: -0.012em;
+  /* Display sizes read better slightly tighter; the larger the heading, the tighter. */
+  font-kerning: normal;
+}
+.editor-host .cm-editor .cm-line.cm-md-h1 {
+  letter-spacing: -0.022em;
+}
+.editor-host .cm-editor .cm-line.cm-md-h2 {
+  letter-spacing: -0.016em;
 }
 .editor-host .cm-editor .cm-line.cm-md-h1 {
   font-size: 1.875em;
@@ -206,6 +214,8 @@ html.focus-mode .editor-host .cm-editor.cm-focused .cm-line.cm-md-table-raw {
   text-decoration-color: var(--text-3);
 }
 .cm-md-inline-code {
+  /* Code shows exactly what was typed: no ligatures like => becoming an arrow. */
+  font-variant-ligatures: none;
   font-family: var(--font-mono);
   font-size: 0.85em;
   background: var(--code-bg);
@@ -221,7 +231,9 @@ html.focus-mode .editor-host .cm-editor.cm-focused .cm-line.cm-md-table-raw {
   color: var(--text);
   text-decoration: underline;
   text-decoration-color: var(--text-3);
-  text-underline-offset: 3px;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
+  text-decoration-skip-ink: auto;
   cursor: pointer;
   transition: text-decoration-color var(--dur-fast) var(--ease-out);
 }
@@ -686,4 +698,92 @@ html.focus-mode .editor-host .cm-editor.cm-focused .cm-line.cm-md-table-raw {
 }
 .cm-bubble-button:active {
   transform: scale(0.92);
+}
+
+/* ---------- Jump feedback ---------- */
+/* After a search hit, outline click or link jump, the target line glows and fades. */
+.editor-host .cm-editor .cm-line.cm-md-flash {
+  animation: line-flash 1.4s var(--ease-out) both;
+}
+@keyframes line-flash {
+  0%,
+  25% {
+    background-color: var(--flash);
+    box-shadow: -10px 0 0 var(--flash), 10px 0 0 var(--flash);
+  }
+  100% {
+    background-color: transparent;
+    box-shadow: -10px 0 0 transparent, 10px 0 0 transparent;
+  }
+}
+.editor-host.jump-fade .cm-content {
+  animation: fade-in 220ms var(--ease-out);
+}
+
+/* ---------- Caret ---------- */
+/* An accent caret that fades instead of blinking hard. CodeMirror restarts the
+   blink after every move by swapping the inline animation name between
+   cm-blink and cm-blink2; each maps to the same fading animation, so the
+   restart still works. */
+.editor-host .cm-editor {
+  --caret: var(--accent);
+}
+.editor-host .cm-editor .cm-cursor,
+.editor-host .cm-editor .cm-dropCursor {
+  border-left: 2px solid var(--caret);
+  border-radius: 1px;
+}
+.editor-host .cm-editor .cm-cursorLayer {
+  animation-name: caret-fade-a !important;
+  animation-timing-function: linear !important;
+}
+.editor-host .cm-editor .cm-cursorLayer[style*="cm-blink2"] {
+  animation-name: caret-fade-b !important;
+}
+@keyframes caret-fade-a {
+  0%,
+  46% {
+    opacity: 1;
+  }
+  56%,
+  90% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+@keyframes caret-fade-b {
+  0%,
+  46% {
+    opacity: 1;
+  }
+  56%,
+  90% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+/* Optional: the caret glides to its new position. */
+html.smooth-caret .editor-host .cm-editor .cm-cursor {
+  transition:
+    left 90ms var(--ease-out),
+    top 90ms var(--ease-out),
+    height 90ms var(--ease-out);
+}
+
+/* ---------- Typography ---------- */
+/* Opening quotes and similar marks hang into the margin, as in print, so the
+   text edge stays straight. Supported by WebKit (macOS); ignored elsewhere. */
+@supports (hanging-punctuation: first) {
+  .editor-host .cm-editor .cm-content {
+    hanging-punctuation: first allow-end last;
+  }
+}
+.editor-host .cm-editor .cm-content {
+  font-kerning: normal;
+  font-variant-ligatures: common-ligatures contextual;
+  font-optical-sizing: auto;
 }

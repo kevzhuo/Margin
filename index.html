@@ -5,6 +5,28 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="light dark" />
     <title>Margin</title>
+    <script>
+      // Apply the saved theme and window classes before anything paints, so the
+      // first frame is already the right colour. Mirrors App.tsx's useTheme.
+      (function () {
+        var root = document.documentElement;
+        try {
+          var settings = JSON.parse(localStorage.getItem("margin.settings.v1") || "{}");
+          var theme = settings.theme || "system";
+          if (theme === "system") theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+          root.dataset.theme = theme;
+          if (settings.fullWidth) root.classList.add("full-width");
+        } catch (e) {
+          root.dataset.theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+        }
+        if (window.__TAURI_INTERNALS__ && /Mac/.test(navigator.userAgent)) root.classList.add("tauri", "titlebar-overlay");
+      })();
+    </script>
+    <style>
+      html { background: #ffffff; }
+      html[data-theme="dark"] { background: #191919; }
+      html.titlebar-overlay { background: transparent; }
+    </style>
   </head>
   <body>
     <div id="root"></div>

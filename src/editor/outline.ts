@@ -7,13 +7,16 @@ export interface Heading {
   pos: number;
 }
 
+/** Blocks that can contain headings. Everything else is skipped without visiting its inline nodes. */
+const HEADING_CONTAINERS = new Set(["Document", "Blockquote", "BulletList", "OrderedList", "ListItem"]);
+
 export function extractHeadings(state: EditorState): Heading[] {
   const headings: Heading[] = [];
   const doc = state.doc;
   syntaxTree(state).iterate({
     enter(n) {
       const m = /^(ATX|Setext)Heading(\d)$/.exec(n.name);
-      if (!m) return;
+      if (!m) return HEADING_CONTAINERS.has(n.name) ? undefined : false;
       const level = Number(m[2]);
       const line = doc.lineAt(n.from);
       const text = line.text

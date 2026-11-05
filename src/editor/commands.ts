@@ -3,6 +3,7 @@ import { EditorView, keymap, type Command, type KeyBinding } from "@codemirror/v
 import { syntaxTree } from "@codemirror/language";
 import { toggleTaskAt } from "./widgets";
 import { scrollToPos } from "./scroll";
+import { flash } from "./flash";
 
 function wrapRange(state: EditorState, range: SelectionRange, left: string, right: string) {
   const from = range.from;
@@ -120,11 +121,12 @@ export const toggleBlockquote: Command = (view) => {
   return true;
 };
 
-/** Move the caret to `pos` and glide the view so that line sits near the top. */
+/** Move the caret to `pos`, bring that line near the top, and highlight it briefly. */
 export function selectAt(view: EditorView, pos: number) {
   view.dispatch({ selection: { anchor: pos } });
   view.focus();
   scrollToPos(view, pos, { align: "start", margin: 48, smooth: true });
+  flash(view, pos);
 }
 
 export function headingLevelAt(state: EditorState, pos: number): number {

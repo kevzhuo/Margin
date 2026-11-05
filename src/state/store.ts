@@ -13,6 +13,7 @@ import {
   type WatchEvent,
 } from "../backend";
 import type { Heading } from "../editor/outline";
+import { fileNameFromTitle, isPlaceholderName, replaceTitle, titleFromDoc } from "./title";
 
 export type ThemePref = "system" | "light" | "dark";
 export type SaveState = "idle" | "saving" | "saved" | "error";
@@ -37,6 +38,8 @@ export interface Jump {
   pos?: number;
   /** Heading slug (for `[text](#heading)` links). */
   heading?: string;
+  /** Briefly highlight the target (default true). */
+  flash?: boolean;
 }
 
 export interface Toast {
@@ -79,6 +82,10 @@ interface Settings {
   fontFamily: FontFamily;
   /** Use the whole editor area instead of a centered column. */
   fullWidth: boolean;
+  /** The caret glides between positions instead of jumping. */
+  smoothCaret: boolean;
+  /** Editing a note's first heading renames its file (and vice versa). */
+  titleSync: boolean;
   focusMode: boolean;
   typewriter: boolean;
   recent: string[];
@@ -97,6 +104,8 @@ const defaultSettings: Settings = {
   lineWidth: "medium",
   fontFamily: "sans",
   fullWidth: false,
+  smoothCaret: false,
+  titleSync: true,
   focusMode: false,
   typewriter: false,
   recent: [],
@@ -152,6 +161,8 @@ export interface AppState {
   lineWidth: LineWidth;
   fontFamily: FontFamily;
   fullWidth: boolean;
+  smoothCaret: boolean;
+  titleSync: boolean;
   focusMode: boolean;
   typewriter: boolean;
   /** Whether each panel fits beside a comfortably wide editor right now. */
@@ -195,7 +206,10 @@ export interface AppState {
   /** With a name, the note is created under that name; without one it starts as "Untitled" in rename mode. */
   createNote(dir?: string, name?: string): Promise<string | null>;
   createFolder(dir?: string): Promise<string | null>;
-  renamePath(path: string, newName: string): Promise<void>;
+  /** `updateHeading: false` skips retitling the note (used when the title itself drove the rename). */
+  renamePath(path: string, newName: string, opts?: { updateHeading?: boolean }): Promise<void>;
+  /** Rename the open note after its title if the two were in sync. Runs automatically after edits. */
+  syncTitle(): Promise<void>;
   movePath(from: string, toDir: string): Promise<void>;
   deletePath(path: string): Promise<void>;
   revealPath(path: string): Promise<void>;
@@ -212,6 +226,8 @@ export interface AppState {
   setLineWidth(width: LineWidth): void;
   setFontFamily(family: FontFamily): void;
   setFullWidth(on: boolean): void;
+  setSmoothCaret(on: boolean): void;
+  setTitleSync(on: boolean): void;
   setFits(sidebarFits: boolean, outlineFits: boolean): void;
   closePeeks(): void;
   setFocusMode(on: boolean): void;
@@ -243,9 +259,14 @@ let unwatch: (() => void) | null = null;
 let treeRefreshTimer: ReturnType<typeof setTimeout> | null = null;
 let toastSeq = 0;
 let initPromise: Promise<void> | null = null;
+/** The open note's title as of its last load or rename; edits are compared against it. */
+let syncedTitle: string | null = null;
+let titleTimer: ReturnType<typeof setTimeout> | null = null;
 let confirmResolver: ((ok: boolean) => void) | null = null;
 
 export const SAVE_DELAY_MS = 500;
+/** Wait for a pause in typing before renaming a note after its title. */
+export const TITLE_SYNC_MS = 700;
 export const TOAST_MS = { info: 3500, error: 7000 } as const;
 export const TOAST_EXIT_MS = 200;
 
@@ -266,6 +287,8 @@ export const useStore = create<AppState>((set, get) => {
       lineWidth: s.lineWidth,
       fontFamily: s.fontFamily,
       fullWidth: s.fullWidth,
+      smoothCaret: s.smoothCaret,
+      titleSync: s.titleSync,
       focusMode: s.focusMode,
       typewriter: s.typewriter,
       recent: s.recent,
@@ -348,11 +371,14 @@ export const useStore = create<AppState>((set, get) => {
   const loadNote = async (path: string) => {
     const backend = get().backend;
     if (!backend) return false;
+    // Finish a pending title rename for the note we're leaving.
+    if (titleTimer) await get().syncTitle();
     await get().flushSave();
     try {
       const content = await backend.readNote(path);
       latestDoc = content;
       savedDoc = content;
+      syncedTitle = titleFromDoc(content);
       set((s) => ({
         activePath: path,
         content,
@@ -369,6 +395,32 @@ export const useStore = create<AppState>((set, get) => {
     } catch (e) {
       fail(`Could not open ${stripExtension(basename(path))}`, e);
       return false;
+    }
+  };
+
+  /** After a file rename, retitle the note if its heading matched the old name. */
+  const retitle = async (path: string, oldStem: string, newStem: string) => {
+    const { activePath, editor, backend } = get();
+    if (!backend) return;
+    const apply = (doc: string, c: { from: number; to: number; insert: string }) => doc.slice(0, c.from) + c.insert + doc.slice(c.to);
+    if (path === activePath) {
+      const doc = editor ? editor.state.doc.toString() : latestDoc;
+      if (doc === null) return;
+      const title = titleFromDoc(doc);
+      if (title === null || fileNameFromTitle(title) !== oldStem) return;
+      const change = replaceTitle(doc, newStem)!;
+      syncedTitle = newStem;
+      if (editor) editor.dispatch({ changes: change, userEvent: "input.rename" });
+      else get().updateContent(apply(doc, change));
+      return;
+    }
+    try {
+      const content = await backend.readNote(path);
+      const title = titleFromDoc(content);
+      if (title === null || fileNameFromTitle(title) !== oldStem) return;
+      await backend.writeNote(path, apply(content, replaceTitle(content, newStem)!));
+    } catch (e) {
+      fail("Could not update the note's title", e);
     }
   };
 
@@ -405,6 +457,8 @@ export const useStore = create<AppState>((set, get) => {
     lineWidth: settings.lineWidth,
     fontFamily: settings.fontFamily,
     fullWidth: settings.fullWidth,
+    smoothCaret: settings.smoothCaret,
+    titleSync: settings.titleSync,
     focusMode: settings.focusMode,
     typewriter: settings.typewriter,
     sidebarFits: true,
@@ -553,6 +607,10 @@ export const useStore = create<AppState>((set, get) => {
       const dirty = doc !== savedDoc;
       if (dirty !== get().dirty) set({ dirty });
       if (!dirty) return;
+      if (get().titleSync) {
+        if (titleTimer) clearTimeout(titleTimer);
+        titleTimer = setTimeout(() => void get().syncTitle(), TITLE_SYNC_MS);
+      }
       if (saveTimer) clearTimeout(saveTimer);
       saveTimer = setTimeout(() => {
         saveTimer = null;
@@ -587,8 +645,13 @@ export const useStore = create<AppState>((set, get) => {
         const path = await backend.createNote(dir ?? vaultRoot, clean || "Untitled");
         await get().refreshTree();
         if (dir) set((s) => ({ expandedDirs: { ...s.expandedDirs, [dir]: true } }));
-        await get().openNote(path);
-        if (!clean) set({ renaming: path });
+        if (!clean && get().titleSync) {
+          // Open with the placeholder title selected: typing names the note.
+          await get().openNote(path, { jump: { line: 1, query: stripExtension(basename(path)), flash: false } });
+        } else {
+          await get().openNote(path);
+          if (!clean) set({ renaming: path });
+        }
         return path;
       } catch (e) {
         fail("Could not create a note", e);
@@ -612,7 +675,7 @@ export const useStore = create<AppState>((set, get) => {
       }
     },
 
-    async renamePath(path, newName) {
+    async renamePath(path, newName, opts = {}) {
       const { backend, activePath } = get();
       if (!backend) return;
       const clean = newName.trim().replace(/[\\/]/g, "");
@@ -633,10 +696,41 @@ export const useStore = create<AppState>((set, get) => {
         remapPaths(path, to);
         await get().refreshTree();
         set({ renaming: null });
+        if (isFile && get().titleSync && opts.updateHeading !== false) {
+          await retitle(to, stripExtension(basename(path)), stripExtension(basename(to)));
+        }
       } catch (e) {
         set({ renaming: null });
         fail("Could not rename", e);
       }
+    },
+
+    async syncTitle() {
+      if (titleTimer) {
+        clearTimeout(titleTimer);
+        titleTimer = null;
+      }
+      const { activePath, titleSync, backend } = get();
+      if (!titleSync || !activePath || !backend || latestDoc === null) return;
+      const title = titleFromDoc(latestDoc);
+      // No heading, or an empty one while the user retypes it: keep the current name.
+      if (title === null || fileNameFromTitle(title) === "" || title === syncedTitle) return;
+      const stem = stripExtension(basename(activePath));
+      // Only follow the title if the name already did; a deliberately different name stays.
+      const wasInSync = isPlaceholderName(stem) || (syncedTitle !== null && fileNameFromTitle(syncedTitle) === stem);
+      syncedTitle = title;
+      if (!wasInSync) return;
+      const wanted = fileNameFromTitle(title);
+      if (wanted === stem) return;
+      const dir = dirname(activePath);
+      const taken = new Set(
+        flattenFiles(get().tree)
+          .filter((f) => dirname(f.path) === dir && f.path !== activePath)
+          .map((f) => stripExtension(f.name).toLowerCase()),
+      );
+      let name = wanted;
+      for (let i = 2; taken.has(name.toLowerCase()); i++) name = `${wanted} ${i}`;
+      if (name !== stem) await get().renamePath(activePath, name, { updateHeading: false });
     },
 
     async movePath(from, toDir) {
@@ -719,6 +813,7 @@ export const useStore = create<AppState>((set, get) => {
         }
         latestDoc = content;
         savedDoc = content;
+        syncedTitle = titleFromDoc(content);
         set((s) => ({ content, contentVersion: s.contentVersion + 1, dirty: false, externalChange: false }));
       } catch (e) {
         fail(`Could not reload ${stripExtension(basename(activePath))}`, e);
@@ -803,6 +898,16 @@ export const useStore = create<AppState>((set, get) => {
 
     setFullWidth(fullWidth) {
       set({ fullWidth });
+      persist();
+    },
+
+    setSmoothCaret(smoothCaret) {
+      set({ smoothCaret });
+      persist();
+    },
+
+    setTitleSync(titleSync) {
+      set({ titleSync });
       persist();
     },
 

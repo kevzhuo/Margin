@@ -15,7 +15,7 @@
  *   - bullet markers and their revealed `-` share one fixed-width box
  */
 import { Decoration, EditorView, ViewPlugin, type DecorationSet, type ViewUpdate } from "@codemirror/view";
-import { EditorState, Facet, StateEffect, StateField, type Extension, type Range, type Text } from "@codemirror/state";
+import { EditorState, Facet, StateEffect, StateField, type Extension, type Range, type Text, type Transaction } from "@codemirror/state";
 import { ensureSyntaxTree, syntaxTree } from "@codemirror/language";
 import type { SyntaxNode, SyntaxNodeRef, Tree } from "@lezer/common";
 import {
@@ -154,11 +154,27 @@ function parseTable(node: SyntaxNode, doc: Text): TableData {
 
 // ---------------------------------------------------------------------------
 
+export interface BuildOptions {
+  /** Only decorate this range (the viewport). Defaults to the whole document. */
+  from?: number;
+  to?: number;
+  /**
+   * "widget" renders inactive tables as block widgets (whole-document builds,
+   * tests). "skip" leaves them to `tableField`, because view plugins may not
+   * provide block decorations.
+   */
+  tables?: "widget" | "skip";
+}
+
 /**
- * Build the complete decoration set for a state. Exported for tests.
+ * Build the decoration set for a state, for the whole document or one range.
+ * Exported for tests.
  */
-export function buildDecorations(state: EditorState, focused = state.field(focusedField, false) ?? true): DecorationSet {
+export function buildDecorations(state: EditorState, focused = state.field(focusedField, false) ?? true, opts: BuildOptions = {}): DecorationSet {
   const doc = state.doc;
+  const rangeFrom = Math.max(0, opts.from ?? 0);
+  const rangeTo = Math.min(doc.length, opts.to ?? doc.length);
+  const tableMode = opts.tables ?? "widget";
   const config = state.facet(livePreviewConfig);
   const resolveImage = config.resolveImage ?? ((s: string) => s);
   const ranges = focused ? state.selection.ranges : [];
@@ -182,7 +198,7 @@ export function buildDecorations(state: EditorState, focused = state.field(focus
     return out;
   };
 
-  const tree: Tree = ensureSyntaxTree(state, doc.length, 150) ?? syntaxTree(state);
+  const tree: Tree = ensureSyntaxTree(state, rangeTo, 100) ?? syntaxTree(state);
   const out: Range<Decoration>[] = [];
   let skipUntil = -1;
 
@@ -200,7 +216,7 @@ export function buildDecorations(state: EditorState, focused = state.field(focus
   const fm = frontMatterRange(doc);
   if (fm) keepBlankLines.push(fm);
   if (fm) {
-    for (const from of lineRange(fm.from, fm.to)) out.push(lineDeco("cm-md-frontmatter").range(from));
+    for (const from of lineRange(fm.from, fm.to)) if (from >= rangeFrom && from <= rangeTo) out.push(lineDeco("cm-md-frontmatter").range(from));
     skipUntil = fm.to;
   }
 
@@ -229,6 +245,8 @@ export function buildDecorations(state: EditorState, focused = state.field(focus
   };
 
   tree.iterate({
+    from: rangeFrom,
+    to: rangeTo,
     enter: (n: SyntaxNodeRef): boolean | void => {
       if (n.name !== "Document" && n.from < skipUntil) return false;
 
@@ -480,9 +498,11 @@ export function buildDecorations(state: EditorState, focused = state.field(focus
           const firstLine = doc.lineAt(n.from);
           const lastLine = doc.lineAt(n.to);
           if (!active) {
-            out.push(
-              Decoration.replace({ widget: new TableWidget(parseTable(node, doc)), block: true }).range(firstLine.from, lastLine.to),
-            );
+            if (tableMode === "widget") {
+              out.push(
+                Decoration.replace({ widget: new TableWidget(parseTable(node, doc)), block: true }).range(firstLine.from, lastLine.to),
+              );
+            }
             skipUntil = lastLine.to;
             return false;
           }
@@ -513,7 +533,8 @@ export function buildDecorations(state: EditorState, focused = state.field(focus
   // Blank lines between blocks are shorter than text lines, so paragraphs and
   // headings are spaced like a page rather than by a full empty line.
   let keep = 0;
-  for (let l = 1; l <= doc.lines; l++) {
+  const lastLineInRange = doc.lineAt(rangeTo).number;
+  for (let l = doc.lineAt(rangeFrom).number; l <= lastLineInRange; l++) {
     const line = doc.line(l);
     if (line.length > 0 && line.text.trim() !== "") continue;
     while (keep < keepBlankLines.length && keepBlankLines[keep].to < line.from) keep++;
@@ -522,7 +543,10 @@ export function buildDecorations(state: EditorState, focused = state.field(focus
   }
 
   // Mark the caret's lines so focus mode can dim everything else.
-  for (const l of activeLines) out.push(lineDeco("cm-md-active").range(doc.line(l).from));
+  for (const l of activeLines) {
+    const from = doc.line(l).from;
+    if (from >= rangeFrom && from <= rangeTo) out.push(lineDeco("cm-md-active").range(from));
+  }
 
   return Decoration.set(out, true);
 }
@@ -531,22 +555,79 @@ function treeChanged(a: EditorState, b: EditorState): boolean {
   return syntaxTree(a) !== syntaxTree(b);
 }
 
-export const livePreviewField = StateField.define<DecorationSet>({
-  create(state) {
-    return buildDecorations(state);
-  },
+/** Containers a GFM table can sit inside; everything else is skipped when looking for tables. */
+const TABLE_CONTAINERS = new Set(["Document", "Blockquote", "BulletList", "OrderedList", "ListItem"]);
+
+/**
+ * Rendered tables are block widgets, which view plugins may not provide, so they
+ * live in this field. It only walks block containers, so it stays cheap even in
+ * long notes.
+ */
+export function buildTableDecorations(state: EditorState, focused = state.field(focusedField, false) ?? true): DecorationSet {
+  const doc = state.doc;
+  const ranges = focused ? state.selection.ranges : [];
+  const out: Range<Decoration>[] = [];
+  syntaxTree(state).iterate({
+    enter(n) {
+      if (n.name === "Table") {
+        const active = ranges.some((r) => r.from <= n.to && r.to >= n.from);
+        if (!active) {
+          const first = doc.lineAt(n.from);
+          const last = doc.lineAt(n.to);
+          out.push(Decoration.replace({ widget: new TableWidget(parseTable(n.node, doc)), block: true }).range(first.from, last.to));
+        }
+        return false;
+      }
+      return TABLE_CONTAINERS.has(n.name) ? undefined : false;
+    },
+  });
+  return Decoration.set(out, true);
+}
+
+const needsRebuild = (u: { docChanged: boolean; startState: EditorState; state: EditorState; transactions: readonly Transaction[] }) =>
+  u.docChanged ||
+  u.transactions.some((tr) => !!tr.selection || tr.reconfigured || tr.effects.some((e) => e.is(setFocused))) ||
+  treeChanged(u.startState, u.state);
+
+export const tableField = StateField.define<DecorationSet>({
+  create: (state) => buildTableDecorations(state),
   update(deco, tr) {
-    const focusChanged = tr.effects.some((e) => e.is(setFocused));
-    if (tr.docChanged || tr.selection || focusChanged || tr.reconfigured || treeChanged(tr.startState, tr.state)) {
-      return buildDecorations(tr.state);
-    }
+    if (needsRebuild({ docChanged: tr.docChanged, startState: tr.startState, state: tr.state, transactions: [tr] })) return buildTableDecorations(tr.state);
     return deco.map(tr.changes);
   },
-  provide: (f) => [
-    EditorView.decorations.from(f),
-    EditorView.atomicRanges.of((view) => view.state.field(f).update({ filter: (_from, _to, value) => !!value.spec.atomic })),
-  ],
+  provide: (f) => EditorView.decorations.from(f),
 });
+
+/**
+ * Everything else is decorated only for the viewport, so the cost of a keystroke
+ * or caret move depends on what is on screen, not on the length of the note.
+ */
+export const livePreviewPlugin = ViewPlugin.fromClass(
+  class {
+    decorations: DecorationSet = Decoration.none;
+    atomic: DecorationSet = Decoration.none;
+    constructor(view: EditorView) {
+      this.build(view);
+    }
+    update(u: ViewUpdate) {
+      if (u.viewportChanged || needsRebuild(u)) this.build(u.view);
+    }
+    build(view: EditorView) {
+      const { state } = view;
+      const { from, to } = view.viewport;
+      const doc = state.doc;
+      // View plugins may not hide line breaks; leave any such range raw.
+      this.decorations = buildDecorations(state, undefined, { from, to, tables: "skip" }).update({
+        filter: (f, t, value) => !(value.point && t > f && doc.lineAt(f).number !== doc.lineAt(t).number),
+      });
+      this.atomic = this.decorations.update({ filter: (_f, _t, value) => !!value.spec.atomic });
+    }
+  },
+  {
+    decorations: (v) => v.decorations,
+    provide: (plugin) => EditorView.atomicRanges.of((view) => view.plugin(plugin)?.atomic ?? Decoration.none),
+  },
+);
 
 /** Find the link URL under a DOM target, if the target is a rendered link. */
 export function linkHrefAt(target: EventTarget | null): string | null {
@@ -556,5 +637,5 @@ export function linkHrefAt(target: EventTarget | null): string | null {
 }
 
 export function livePreview(options: LivePreviewOptions = {}): Extension {
-  return [livePreviewConfig.of(options), focusedField, focusTracker, focusReconciler, livePreviewField];
+  return [livePreviewConfig.of(options), focusedField, focusTracker, focusReconciler, tableField, livePreviewPlugin];
 }
