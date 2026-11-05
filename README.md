@@ -80,6 +80,24 @@ Build installers for the current platform into `src-tauri/target/release/bundle`
 npm run tauri build
 ```
 
+`npm run dev` and `npm run build` (and so the two `tauri` commands) first
+install dependencies if `package-lock.json` changed since the last install,
+so pulling a change that adds a package just works.
+
+### App icon
+
+The icon's artwork is `assets/app-icon-artwork.webp`. `assets/app-icon.png` is
+that artwork cut out and placed on Apple's icon grid (an 824 px rounded square
+with a soft shadow on a 1024 px canvas), so it matches other apps in the Dock.
+To regenerate every size in `src-tauri/icons` from it:
+
+```bash
+npx tauri icon assets/app-icon.png
+```
+
+That also writes Android and iOS icon sets, which this app doesn't use; delete
+`src-tauri/icons/android` and `src-tauri/icons/ios` afterwards.
+
 ### Checks
 
 ```bash
@@ -118,6 +136,8 @@ src/
                   and the command registry
   styles/         design tokens, motion keyframes, and stylesheets
 src-tauri/        Rust shell: window config, vault commands, file watcher
+assets/           the app icon's artwork and its 1024 px master
+scripts/          ensure-deps.mjs, which installs changed dependencies before dev and build
 e2e/              Playwright tests
 docs/research.md  the research and design notes this project was built from
 ```
