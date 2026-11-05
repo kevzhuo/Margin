@@ -66,6 +66,8 @@ export function SettingsPopover() {
   const fullWidth = useStore((s) => s.fullWidth);
   const focusMode = useStore((s) => s.focusMode);
   const typewriter = useStore((s) => s.typewriter);
+  const smoothCaret = useStore((s) => s.smoothCaret);
+  const titleSync = useStore((s) => s.titleSync);
   const { mounted, closing } = usePresence(open, 140);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -156,6 +158,8 @@ export function SettingsPopover() {
       <div className="settings-section">Writing</div>
       <Toggle label="Focus mode" hint={formatShortcut("F8")} checked={focusMode} onChange={s.setFocusMode} />
       <Toggle label="Typewriter mode" hint={formatShortcut("F9")} checked={typewriter} onChange={s.setTypewriter} />
+      <Toggle label="Smooth caret" checked={smoothCaret} onChange={s.setSmoothCaret} />
+      <Toggle label="Name notes after their title" checked={titleSync} onChange={s.setTitleSync} />
     </div>
   );
 }

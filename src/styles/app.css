@@ -1191,3 +1191,108 @@ html.titlebar-overlay .outline {
 .toast[data-leaving] {
   animation: toast-out 200ms var(--ease-in) forwards;
 }
+
+/* ---------- Swipe navigation ---------- */
+/* Keep the browser's own horizontal overscroll navigation out of the way. */
+html,
+body {
+  overscroll-behavior-x: none;
+}
+.swipe-indicator {
+  --progress: 0;
+  position: absolute;
+  top: 50%;
+  z-index: 20;
+  width: 40px;
+  height: 40px;
+  margin-top: -20px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-2);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow);
+  pointer-events: none;
+  opacity: min(1, calc(var(--progress) * 1.6));
+  transition:
+    transform var(--dur) var(--ease-out),
+    opacity var(--dur) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+/* While the fingers are moving the arrow tracks them directly. */
+.swipe-indicator.tracking {
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out),
+    scale var(--dur-fast) var(--ease-spring);
+}
+.swipe-indicator.back {
+  left: -44px;
+  transform: translateX(calc(var(--progress) * 60px));
+}
+.swipe-indicator.forward {
+  right: -44px;
+  transform: translateX(calc(var(--progress) * -60px));
+}
+.swipe-indicator[data-armed="true"] {
+  background: var(--accent);
+  color: #fff;
+  scale: 1.08;
+}
+
+/* ---------- Scrolled note ---------- */
+/* A hairline under the top bar and a soft fade once the note scrolls under it. */
+.topbar {
+  position: relative;
+  z-index: 4;
+  box-shadow: 0 1px 0 transparent;
+  transition:
+    box-shadow var(--dur) var(--ease-out),
+    padding-left var(--dur-slow) var(--ease-out);
+}
+html.editor-scrolled .topbar {
+  box-shadow: 0 1px 0 var(--border);
+}
+.editor-pane::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 18px;
+  z-index: 3;
+  pointer-events: none;
+  background: linear-gradient(var(--bg), transparent);
+  opacity: 0;
+  transition: opacity var(--dur) var(--ease-out);
+}
+html.editor-scrolled .editor-pane::before {
+  opacity: 1;
+}
+
+/* ---------- Scrollbars (Windows and Linux) ---------- */
+/* macOS already draws thin overlay scrollbars. Elsewhere, replace the heavy
+   default with a slim thumb that appears when the pointer is over the area. */
+html:not(.platform-macos) ::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+html:not(.platform-macos) ::-webkit-scrollbar-track,
+html:not(.platform-macos) ::-webkit-scrollbar-corner {
+  background: transparent;
+}
+html:not(.platform-macos) ::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 8px;
+  background-clip: content-box;
+  background-color: transparent;
+}
+html:not(.platform-macos) :hover::-webkit-scrollbar-thumb {
+  background-color: var(--scrollbar);
+}
+html:not(.platform-macos) ::-webkit-scrollbar-thumb:hover,
+html:not(.platform-macos) ::-webkit-scrollbar-thumb:active {
+  background-color: var(--scrollbar-hover);
+}

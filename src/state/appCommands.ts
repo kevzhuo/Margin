@@ -193,6 +193,12 @@ export function appCommands(): AppCommand[] {
       keywords: "full width margins layout page column wide",
       run: () => useStore.getState().setFullWidth(!useStore.getState().fullWidth),
     },
+    {
+      id: "editor.smoothCaret",
+      title: s.smoothCaret ? "Turn off smooth caret" : "Turn on smooth caret",
+      keywords: "cursor animation glide",
+      run: () => useStore.getState().setSmoothCaret(!useStore.getState().smoothCaret),
+    },
     { id: "text.bigger", title: "Increase text size", keywords: "zoom in font larger", keys: "Mod+=", global: true, run: () => useStore.getState().bumpFontSize(1) },
     { id: "text.smaller", title: "Decrease text size", keywords: "zoom out font smaller", keys: "Mod+-", global: true, run: () => useStore.getState().bumpFontSize(-1) },
     { id: "text.reset", title: "Reset text size", keywords: "zoom actual size font", run: () => useStore.getState().setFontSize(16) },

@@ -171,20 +171,28 @@ describe("external changes", () => {
 });
 
 describe("files", () => {
-  it("creates a note, opens it and enters rename mode", async () => {
+  it("creates a note and opens it with its title selected for typing", async () => {
     const store = await fresh();
     const path = await store.getState().createNote();
     expect(path).toBe(`${R}/Untitled.md`);
     expect(store.getState().activePath).toBe(path);
-    expect(store.getState().renaming).toBe(path);
+    expect(store.getState().renaming).toBeNull();
+    expect(store.getState().jump).toEqual({ path, line: 1, query: "Untitled", flash: false });
     expect(store.getState().tree.some((n) => n.name === "Untitled.md")).toBe(true);
   });
-  it("renames the active note and keeps it active", async () => {
+  it("creates a note in rename mode when title syncing is off", async () => {
+    const store = await fresh();
+    store.getState().setTitleSync(false);
+    const path = await store.getState().createNote();
+    expect(store.getState().renaming).toBe(path);
+  });
+  it("renames the active note, keeps it active, and retitles it", async () => {
     const store = await fresh();
     await store.getState().renamePath(DESIGN, "Design");
     expect(store.getState().activePath).toBe(`${R}/Projects/Design.md`);
     expect(store.getState().renaming).toBeNull();
-    expect(await backend.readNote(`${R}/Projects/Design.md`)).toContain("# Editor design notes");
+    await store.getState().flushSave();
+    expect(await backend.readNote(`${R}/Projects/Design.md`)).toMatch(/^# Design\n/);
   });
   it("renames a folder containing the active note", async () => {
     const store = await fresh();
@@ -432,5 +440,72 @@ describe("responsive panels and full width", () => {
     const store = await fresh();
     store.getState().setFullWidth(true);
     expect(JSON.parse(localStorage.getItem("margin.settings.v1")!).fullWidth).toBe(true);
+  });
+});
+
+describe("title and file name sync", () => {
+  const typeTitle = (store: Awaited<ReturnType<typeof fresh>>, title: string) => {
+    const doc = store.getState().content!;
+    store.getState().updateContent(doc.replace(/^# .*$/m, `# ${title}`));
+  };
+
+  it("renames a new note after its title once typing pauses", async () => {
+    const store = await fresh();
+    await store.getState().createNote();
+    typeTitle(store, "Meeting notes");
+    expect(store.getState().activePath).toBe(`${R}/Untitled.md`);
+    await vi.advanceTimersByTimeAsync(mod.TITLE_SYNC_MS);
+    expect(store.getState().activePath).toBe(`${R}/Meeting notes.md`);
+    expect(store.getState().history.at(-1)).toBe(`${R}/Meeting notes.md`);
+  });
+
+  it("follows later title edits while the two stay in sync", async () => {
+    const store = await fresh();
+    typeTitle(store, "Design notes");
+    await vi.advanceTimersByTimeAsync(mod.TITLE_SYNC_MS);
+    expect(store.getState().activePath).toBe(`${R}/Projects/Design notes.md`);
+    typeTitle(store, "Design notes v2");
+    await vi.advanceTimersByTimeAsync(mod.TITLE_SYNC_MS);
+    expect(store.getState().activePath).toBe(`${R}/Projects/Design notes v2.md`);
+  });
+
+  it("leaves a deliberately different file name alone", async () => {
+    const store = await fresh();
+    const daily = `${R}/Templates/Daily note.md`;
+    await store.getState().openNote(daily);
+    typeTitle(store, "Tuesday");
+    await vi.advanceTimersByTimeAsync(mod.TITLE_SYNC_MS);
+    expect(store.getState().activePath).toBe(daily);
+  });
+
+  it("keeps the name while the title is empty, and avoids taking another note's name", async () => {
+    const store = await fresh();
+    typeTitle(store, "");
+    await vi.advanceTimersByTimeAsync(mod.TITLE_SYNC_MS);
+    expect(store.getState().activePath).toBe(DESIGN);
+    typeTitle(store, "Roadmap");
+    await vi.advanceTimersByTimeAsync(mod.TITLE_SYNC_MS);
+    expect(store.getState().activePath).toBe(`${R}/Projects/Roadmap 2.md`);
+  });
+
+  it("does nothing when turned off", async () => {
+    const store = await fresh();
+    store.getState().setTitleSync(false);
+    typeTitle(store, "Something else");
+    await vi.advanceTimersByTimeAsync(mod.TITLE_SYNC_MS);
+    expect(store.getState().activePath).toBe(DESIGN);
+  });
+
+  it("retitles a note that isn't open when its file is renamed", async () => {
+    const store = await fresh();
+    await store.getState().renamePath(ROADMAP, "Plan");
+    expect(await backend.readNote(`${R}/Projects/Plan.md`)).toMatch(/^# Plan\n/);
+  });
+
+  it("finishes a pending rename before switching notes", async () => {
+    const store = await fresh();
+    typeTitle(store, "Quick switch");
+    await store.getState().openNote(ROADMAP);
+    expect(store.getState().tree.some((n) => n.children?.some((c) => c.name === "Quick switch.md"))).toBe(true);
   });
 });

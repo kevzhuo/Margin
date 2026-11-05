@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildDecorations } from "./livePreview";
+import { buildDecorations, buildTableDecorations } from "./livePreview";
 import { collect, dimmed, hidden, lineClass, markClass, stateOf, type DecoInfo } from "./testUtils";
 
 function decos(doc: string, cursor?: number | { anchor: number; head?: number }, focused = true): DecoInfo[] {
@@ -357,5 +357,36 @@ describe("whole document", () => {
       expect(state.doc.lineAt(x.from).from).toBe(x.from);
       expect(x.to).toBe(x.from);
     }
+  });
+});
+
+describe("viewport-limited builds", () => {
+  const long = Array.from({ length: 200 }, (_, i) => `## Heading ${i}\n\nText with **bold** ${i}.\n`).join("\n");
+
+  it("only decorates the requested range, so cost follows the viewport", () => {
+    const state = stateOf(long, 0);
+    const lineTwelveEnd = state.doc.line(12).to;
+    const set = buildDecorations(state, true, { from: 0, to: state.doc.line(10).to, tables: "skip" });
+    const d = collect(set, long);
+    expect(d.length).toBeGreaterThan(0);
+    expect(d.every((x) => x.from <= lineTwelveEnd)).toBe(true);
+    const full = collect(buildDecorations(state, true), long);
+    expect(full.length).toBeGreaterThan(d.length * 10);
+  });
+
+  it("leaves tables to the table field when asked", () => {
+    const doc = "intro\n\n| a | b |\n| - | - |\n| 1 | 2 |\n\nend";
+    const state = stateOf(doc, 0);
+    expect(collect(buildDecorations(state, true, { tables: "skip" }), doc).some((x) => x.widget === "TableWidget")).toBe(false);
+    const tables = collect(buildTableDecorations(state, true), doc);
+    expect(tables.map((x) => [x.widget, x.block])).toEqual([["TableWidget", true]]);
+    // With the caret inside, the table is raw and the field adds nothing.
+    const inside = stateOf(doc, doc.indexOf("| 1"));
+    expect(collect(buildTableDecorations(inside, true), doc)).toEqual([]);
+  });
+
+  it("finds tables nested in lists and quotes", () => {
+    const doc = "> | a |\n> | - |\n> | 1 |\n\nx";
+    expect(collect(buildTableDecorations(stateOf(doc, doc.length), true), doc).some((x) => x.widget === "TableWidget")).toBe(true);
   });
 });

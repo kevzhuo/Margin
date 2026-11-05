@@ -23,7 +23,9 @@
           ],
           "state": "followsWindowActiveState"
         },
-        "dragDropEnabled": false
+        "dragDropEnabled": false,
+        "visible": false,
+        "label": "main"
       }
     ]
   }
