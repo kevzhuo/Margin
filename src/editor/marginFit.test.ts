@@ -42,10 +42,6 @@ describe("fitKind", () => {
     expect(fitKind(markIn("cm-md-heading cm-md-h4", "cm-md-mark cm-md-margin-mark"))).toBe("h4");
   });
 
-  it("names task markers", () => {
-    expect(fitKind(markIn("cm-md-li cm-md-li-task", "cm-md-mark cm-md-ghost"))).toBe("task");
-  });
-
   it("ignores marks outside headings", () => {
     expect(fitKind(markIn("cm-md-quote", "cm-md-mark cm-md-margin-mark"))).toBeNull();
   });

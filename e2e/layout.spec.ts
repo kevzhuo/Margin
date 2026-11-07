@@ -24,8 +24,6 @@ const MARKS_DOC = `# Level one
 ##### Level five
 
 ###### Level six
-
-- [ ] A task
 `;
 
 async function placeCaret(page: Page, text: string) {
@@ -53,7 +51,7 @@ function lineGeometry(page: Page, startsWith: string) {
     let node: Node | null;
     let text: Text | null = null;
     while ((node = walker.nextNode())) {
-      if ((node.parentElement as Element).closest(".cm-md-listmark, .cm-md-olmark, .cm-md-ghost")) continue;
+      if ((node.parentElement as Element).closest(".cm-md-listmark, .cm-md-olmark")) continue;
       if (node.textContent!.trim()) {
         text = node as Text;
         break;
@@ -138,9 +136,9 @@ test.describe("in a small window", () => {
       if (font === "a wide font") await page.evaluate(() => document.documentElement.style.setProperty("--font-editor-sans", '"DejaVu Sans"'));
       await loadDoc(page, MARKS_DOC);
       const scrollerLeft = (await page.locator(".cm-scroller").boundingBox())!.x;
-      for (const text of ["Level one", "Level two", "Level three", "Level four", "Level five", "Level six", "A task"]) {
+      for (const text of ["Level one", "Level two", "Level three", "Level four", "Level five", "Level six"]) {
         await placeCaret(page, text);
-        const mark = page.locator(".cm-line", { hasText: text }).locator(".cm-md-margin-mark, .cm-md-ghost");
+        const mark = page.locator(".cm-line", { hasText: text }).locator(".cm-md-margin-mark");
         await expect(mark).toBeVisible();
         await expect.poll(async () => (await mark.boundingBox())!.x, { message: text }).toBeGreaterThanOrEqual(scrollerLeft);
       }

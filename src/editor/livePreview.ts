@@ -10,8 +10,8 @@
  *
  * Layout stability rules (so nothing jumps when you click into a line):
  *   - heading size/weight come from line classes that apply in both states
- *   - block delimiters (`#`, `>`, `- [ ]`) render in the left margin when
- *     revealed, so the text never shifts
+ *   - block delimiters (`#`, `>`) render in the left margin when revealed,
+ *     so the text never shifts; a task's checkbox stays a checkbox
  *   - bullet markers and their revealed `-` share one fixed-width box
  */
 import { Decoration, EditorView, ViewPlugin, type DecorationSet, type ViewUpdate } from "@codemirror/view";
@@ -28,6 +28,7 @@ import {
   TableWidget,
   type TableCell,
   type TableData,
+  type TableNest,
 } from "./widgets";
 import { MathWidget } from "./mathRender";
 import { mathTex } from "./mathSyntax";
@@ -122,6 +123,22 @@ function listDepth(item: SyntaxNode): number {
   return depth;
 }
 
+/**
+ * Where a table sits: inside a quote (it keeps the quote's bar) and inside a
+ * list item (it lines up with the item's text).
+ */
+function tableNest(node: SyntaxNode): TableNest {
+  let quote = false;
+  let item: SyntaxNode | null = null;
+  for (let p = node.parent; p; p = p.parent) {
+    if (p.name === "Blockquote") quote = true;
+    if (p.name === "ListItem") item ??= p;
+  }
+  if (!item) return { quote, list: null };
+  const kind = item.getChild("Task") ? "task" : item.parent?.name === "OrderedList" ? "ol" : "ul";
+  return { quote, list: { depth: listDepth(item), kind } };
+}
+
 function childText(node: SyntaxNode, name: string, doc: Text): string | null {
   const child = node.getChild(name);
   return child ? doc.sliceString(child.from, child.to) : null;
@@ -180,12 +197,6 @@ export interface BuildOptions {
   /** Only decorate this range (the viewport). Defaults to the whole document. */
   from?: number;
   to?: number;
-  /**
-   * "widget" renders inactive tables as block widgets (whole-document builds,
-   * tests). "skip" leaves them to `blockField`, because view plugins may not
-   * provide block decorations.
-   */
-  tables?: "widget" | "skip";
 }
 
 /**
@@ -196,7 +207,6 @@ export function buildDecorations(state: EditorState, focused = state.field(focus
   const doc = state.doc;
   const rangeFrom = Math.max(0, opts.from ?? 0);
   const rangeTo = Math.min(doc.length, opts.to ?? doc.length);
-  const tableMode = opts.tables ?? "widget";
   const config = state.facet(livePreviewConfig);
   const resolveImage = config.resolveImage ?? ((s: string) => s);
   const ranges = focused ? state.selection.ranges : [];
@@ -510,9 +520,8 @@ export function buildDecorations(state: EditorState, focused = state.field(focus
             const checked = /x/i.test(doc.sliceString(marker.from, marker.to));
             let to = marker.to;
             if (doc.sliceString(to, to + 1) === " ") to++;
-            // On the caret's line the raw "- [ ]" shows beside the checkbox.
-            const source = active ? doc.sliceString(n.from, marker.to) : null;
-            out.push(Decoration.replace({ widget: new CheckboxWidget(checked, source), atomic: true }).range(n.from, to));
+            // The checkbox stands for "- [ ] " on every line, the caret's too.
+            out.push(Decoration.replace({ widget: new CheckboxWidget(checked), atomic: true }).range(n.from, to));
             return;
           }
           // The marker box includes the space after it, so the text starts at the
@@ -538,26 +547,22 @@ export function buildDecorations(state: EditorState, focused = state.field(focus
           return;
         }
 
+        // Tables: away from the caret, the block field draws them. At the
+        // caret, the whole table is its plain source, pipes muted, with
+        // nothing inside rendered, so syntax and rendering never mix.
         case "Table": {
-          const node = n.node;
-          const active = touches(n.from, n.to);
-          const firstLine = doc.lineAt(n.from);
-          const lastLine = doc.lineAt(n.to);
-          if (!active) {
-            if (tableMode === "widget") {
-              out.push(
-                Decoration.replace({ widget: new TableWidget(parseTable(node, doc)), block: true }).range(firstLine.from, lastLine.to),
-              );
-            }
-            skipUntil = lastLine.to;
+          if (!touches(n.from, n.to)) {
+            skipUntil = doc.lineAt(n.to).to;
             return false;
           }
           for (const from of lineRange(n.from, n.to)) out.push(lineDeco("cm-md-table-raw").range(from));
-          return;
+          tree.iterate({
+            from: n.from,
+            to: n.to,
+            enter: (c) => void (c.name === "TableDelimiter" && out.push(dim.range(c.from, c.to))),
+          });
+          return false;
         }
-        case "TableDelimiter":
-          out.push(dim.range(n.from, n.to));
-          return;
 
         case "Escape": {
           hideOrDim(n.from, n.from + 1, lineActive(n.from));
@@ -627,7 +632,7 @@ export function buildBlockDecorations(state: EditorState, focused = state.field(
         const first = doc.lineAt(n.from);
         const last = doc.lineAt(n.to);
         if (n.name === "Table") {
-          if (!active) out.push(Decoration.replace({ widget: new TableWidget(parseTable(n.node, doc)), block: true }).range(first.from, last.to));
+          if (!active) out.push(Decoration.replace({ widget: new TableWidget(parseTable(n.node, doc), tableNest(n.node)), block: true }).range(first.from, last.to));
         } else {
           const tex = mathTex(n.node, doc);
           const closed = n.node.getChildren("MathMark").length >= 2;
@@ -697,7 +702,7 @@ const livePreviewPlugin = ViewPlugin.fromClass(
       const { from, to } = view.viewport;
       const doc = state.doc;
       // View plugins may not hide line breaks; leave any such range raw.
-      this.decorations = buildDecorations(state, undefined, { from, to, tables: "skip" }).update({
+      this.decorations = buildDecorations(state, undefined, { from, to }).update({
         filter: (f, t, value) => !(value.point && t > f && doc.lineAt(f).number !== doc.lineAt(t).number),
       });
       this.atomic = this.decorations.update({ filter: (_f, _t, value) => !!value.spec.atomic });

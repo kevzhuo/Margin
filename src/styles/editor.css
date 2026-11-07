@@ -1,5 +1,7 @@
 /* Hairlines between cells inside one rounded outline, and a soft header. */
 .cm-md-table table {
+  font-size: 14px;
+  line-height: 1.45;
   border-collapse: separate;
   border-spacing: 0;
   width: 100%;
@@ -132,8 +134,7 @@ html.focus-mode .editor-host .cm-editor.cm-focused .cm-line.cm-md-table-raw {
 /* Revealed syntax fades in. CodeMirror keeps these nodes while you type
    inside the element, so the animation plays once per reveal. */
 .cm-md-mark,
-.cm-md-listmark,
-.cm-md-ghost {
+.cm-md-listmark {
   animation: fade-in var(--dur-fast) var(--ease-out);
 }
 .cm-md-mark,
@@ -159,17 +160,6 @@ html.focus-mode .editor-host .cm-editor.cm-focused .cm-line.cm-md-table-raw {
   margin-right: 8px;
   top: 2px;
   white-space: pre;
-  pointer-events: none;
-}
-/* Raw task marker shown beside its checkbox on the caret's line. */
-.cm-md-checkbox .cm-md-ghost {
-  position: absolute;
-  right: 100%;
-  bottom: -0.1em;
-  margin-right: 8px;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  line-height: 1;
   pointer-events: none;
 }
 
@@ -228,8 +218,7 @@ html.focus-mode .editor-host .cm-editor.cm-focused .cm-line.cm-md-table-raw {
 }
 /* Marks too wide for a narrow margin are scaled down by the marginFit
    plugin (src/editor/marginFit.ts), which sets one variable per kind. */
-.cm-md-margin-mark,
-.cm-md-checkbox .cm-md-ghost {
+.cm-md-margin-mark {
   transform-origin: right center;
 }
 .cm-md-h1 .cm-md-margin-mark {
@@ -249,9 +238,6 @@ html.focus-mode .editor-host .cm-editor.cm-focused .cm-line.cm-md-table-raw {
 }
 .cm-md-h6 .cm-md-margin-mark {
   scale: var(--fit-h6, 1);
-}
-.cm-md-checkbox .cm-md-ghost {
-  scale: var(--fit-task, 1);
 }
 .cm-md-h1 .cm-md-margin-mark {
   top: 18px;
@@ -678,11 +664,18 @@ html.focus-mode .editor-host .cm-editor.cm-focused .cm-line.cm-md-table-raw {
 /* ---------- Tables ---------- */
 .cm-md-table {
   padding: 6px 0;
-  font-size: 14px;
-  line-height: 1.45;
   /* Wide tables scroll inside their own box instead of widening the page. */
   overflow-x: auto;
   max-width: 100%;
+}
+/* A table keeps its surroundings: the bar of the quote it is in, and the
+   indent of the list item it belongs to (same measures as those lines). */
+.cm-md-table.in-quote {
+  border-left: 3px solid var(--quote-border);
+  padding-left: 16px;
+}
+.cm-md-table.in-list {
+  margin-left: calc(var(--li-depth, 0) * var(--li-indent) + var(--li-mark));
 }
 .cm-md-table table {
   border-collapse: collapse;

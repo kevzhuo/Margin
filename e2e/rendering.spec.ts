@@ -69,3 +69,30 @@ test("an image that fails to load names the missing file", async ({ page }) => {
   await expect(missing).toContainText("Not found");
   expect(await missing.getAttribute("title")).toBe("attachments/Flow%20chart.png");
 });
+
+test("a table keeps its quote bar, and lines up with the text of its list item", async ({ page }) => {
+  await openNote(page, "> | In | a quote |\n> | -- | -- |\n> | 1 | 2 |\n\n- A list item\n  | In | a list |\n  | -- | -- |\n  | 1 | 2 |\n\nEnd\n");
+  const quoted = page.locator(".cm-md-table.in-quote");
+  await expect(quoted).toBeVisible();
+  expect(await quoted.evaluate((el) => getComputedStyle(el).borderLeftWidth)).toBe("3px");
+  const listed = page.locator(".cm-md-table.in-list table");
+  const itemText = await page.locator(".cm-line", { hasText: "A list item" }).evaluate((line) => {
+    const range = document.createRange();
+    const text = [...line.querySelectorAll("*"), line].flatMap((n) => [...n.childNodes]).find((c) => c.nodeType === 3 && c.textContent!.includes("A list item"))!;
+    range.selectNodeContents(text);
+    return range.getBoundingClientRect().x;
+  });
+  expect(Math.abs((await listed.boundingBox())!.x - itemText)).toBeLessThan(2);
+});
+
+test("a table being edited is plain source, with nothing inside rendered", async ({ page }) => {
+  await openNote(page, "| Feature | Notes |\n| --- | --- |\n| **Bold** | $x^2$ and ![pic](nope.png) |\n\nAfter\n");
+  await page.locator(".cm-md-table td").first().click();
+  const raw = page.locator(".cm-md-table-raw");
+  await expect(raw).toHaveCount(3);
+  await expect(raw.nth(2)).toHaveText("| **Bold** | $x^2$ and ![pic](nope.png) |");
+  await expect(page.locator(".cm-md-table-raw .katex, .cm-md-table-raw .cm-md-image, .cm-md-table-raw .cm-md-image-missing")).toHaveCount(0);
+  // Leaving the table renders it again.
+  await blurEditor(page);
+  await expect(page.locator(".cm-md-table strong")).toHaveText("Bold");
+});

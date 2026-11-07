@@ -26,14 +26,11 @@ export class BulletWidget extends WidgetType {
  * `source` is the raw marker, shown beside the box while the caret is on the line.
  */
 export class CheckboxWidget extends WidgetType {
-  constructor(
-    readonly checked: boolean,
-    readonly source: string | null = null,
-  ) {
+  constructor(readonly checked: boolean) {
     super();
   }
   eq(other: CheckboxWidget) {
-    return other.checked === this.checked && other.source === this.source;
+    return other.checked === this.checked;
   }
   toDOM(view: EditorView) {
     const wrap = document.createElement("span");
@@ -61,18 +58,6 @@ export class CheckboxWidget extends WidgetType {
     const input = wrap.querySelector("input")!;
     input.checked = this.checked;
     input.setAttribute("aria-label", this.checked ? "Mark task as not done" : "Mark task as done");
-    let ghost = wrap.querySelector<HTMLElement>(".cm-md-ghost");
-    if (this.source === null) {
-      ghost?.remove();
-      return;
-    }
-    if (!ghost) {
-      ghost = document.createElement("span");
-      ghost.className = "cm-md-mark cm-md-ghost";
-      ghost.setAttribute("aria-hidden", "true");
-      wrap.appendChild(ghost);
-    }
-    ghost.textContent = this.source;
   }
   ignoreEvent() {
     return true;
@@ -195,6 +180,12 @@ export interface TableCell {
   align: "left" | "center" | "right" | null;
 }
 
+/** What a table is nested in, so it keeps its quote bar and list indent. */
+export interface TableNest {
+  quote: boolean;
+  list: { depth: number; kind: "ul" | "ol" | "task" } | null;
+}
+
 export interface TableData {
   header: TableCell[];
   rows: TableCell[][];
@@ -202,15 +193,23 @@ export interface TableData {
 
 /** Rendered table shown while the caret is outside the table. */
 export class TableWidget extends WidgetType {
-  constructor(readonly data: TableData) {
+  constructor(
+    readonly data: TableData,
+    readonly nest: TableNest = { quote: false, list: null },
+  ) {
     super();
   }
   eq(other: TableWidget) {
-    return JSON.stringify(other.data) === JSON.stringify(this.data);
+    return JSON.stringify([other.data, other.nest]) === JSON.stringify([this.data, this.nest]);
   }
   toDOM(view: EditorView) {
     const wrap = document.createElement("div");
     wrap.className = "cm-md-table";
+    if (this.nest.quote) wrap.classList.add("in-quote");
+    if (this.nest.list) {
+      wrap.classList.add("in-list", `cm-md-li-${this.nest.list.kind}`);
+      wrap.style.setProperty("--li-depth", String(this.nest.list.depth));
+    }
     const table = document.createElement("table");
     const place = (cell: HTMLElement, data: TableCell) => {
       cell.append(renderInline(data.text));

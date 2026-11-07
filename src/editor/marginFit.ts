@@ -5,11 +5,8 @@ const EDGE_GAP = 4;
 /** Marks never shrink below this, so they stay readable. */
 const MIN_SCALE = 0.4;
 
-const MARKS = ".cm-md-margin-mark, .cm-md-checkbox .cm-md-ghost";
-
-/** Which CSS variable scales a mark: one per heading level, one for task markers. */
+/** Which CSS variable scales a mark: one per heading level. */
 export function fitKind(mark: Element): string | null {
-  if (mark.classList.contains("cm-md-ghost")) return "task";
   const line = mark.closest(".cm-line");
   const level = line?.className.match(/\bcm-md-h([1-6])\b/);
   return level ? `h${level[1]}` : null;
@@ -28,10 +25,10 @@ export function fitScale(right: number, width: number, scale: number, edge: numb
 }
 
 /**
- * Heading marks ("## ") and raw task markers ("- [ ] ") are drawn in the left
- * margin, beside the caret's line. Their width depends on the font and text
- * size, and the margin narrows to 40px in small windows, so a deep heading's
- * "#####" can be wider than the margin. This measures the marks that are
+ * Heading marks ("## ") are drawn in the left margin, beside the caret's
+ * line. Their width depends on the font and text size, and the margin
+ * narrows to 40px in small windows, so a deep heading's "#####" can be wider
+ * than the margin. This measures the marks that are
  * showing and shrinks any that would cross the editor's edge, through a CSS
  * variable per kind of mark. Scaling, rather than resizing the font, keeps
  * the mark's position and vertical centering.
@@ -55,7 +52,7 @@ export const marginFit = ViewPlugin.fromClass(
     read(view: EditorView): Map<string, number> {
       const next = new Map<string, number>();
       const edge = view.scrollDOM.getBoundingClientRect().left + EDGE_GAP;
-      for (const mark of view.contentDOM.querySelectorAll(MARKS)) {
+      for (const mark of view.contentDOM.querySelectorAll(".cm-md-margin-mark")) {
         const kind = fitKind(mark);
         const rect = mark.getBoundingClientRect();
         if (!kind || !rect.width) continue;

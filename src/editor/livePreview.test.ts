@@ -195,7 +195,6 @@ describe("lists", () => {
 
 describe("tasks", () => {
   const doc = "- [ ] todo\n- [x] done\n\nz";
-  const source = (x: { widgetObj: object | null }) => (x.widgetObj as { source: string | null }).source;
   it("uses a checkbox widget in both states and marks done lines", () => {
     const d = decos(doc, doc.length);
     const boxes = d.filter((x) => x.widget === "CheckboxWidget");
@@ -207,12 +206,15 @@ describe("tasks", () => {
     expect(d.some((x) => lineClass(x, "cm-md-task") && lineClass(x, "cm-md-li-task") && x.from === 0)).toBe(true);
     expect(d.some((x) => lineClass(x, "cm-md-task-done") && x.from === 11)).toBe(true);
     expect(d.some((x) => lineClass(x, "cm-md-task-done") && x.from === 0)).toBe(false);
-    expect(boxes.every((b) => source(b) === null)).toBe(true);
   });
-  it("shows the raw marker beside the checkbox only on the active line", () => {
+  it("shows only the checkbox on the caret's line too, never the raw marker", () => {
     const d = decos(doc, 8);
     const boxes = d.filter((x) => x.widget === "CheckboxWidget");
-    expect(boxes.map(source)).toEqual(["- [ ]", null]);
+    expect(boxes.map((b) => [b.from, b.to, (b.widgetObj as { checked: boolean }).checked])).toEqual([
+      [0, 6, false],
+      [11, 17, true],
+    ]);
+    expect(d.some((x) => x.from < 6 && dimmed(x))).toBe(false);
   });
 });
 
@@ -249,18 +251,33 @@ describe("horizontal rules", () => {
 describe("tables", () => {
   const doc = "| a | b |\n| - | - |\n| 1 | 2 |\n\ntext";
   it("renders a block table widget when the caret is outside", () => {
-    const d = decos(doc, doc.length);
-    const t = d.find((x) => x.widget === "TableWidget");
+    const t = collect(buildBlockDecorations(stateOf(doc, doc.length), true), doc).find((x) => x.widget === "TableWidget");
     expect(t).toBeDefined();
     expect(t!.block).toBe(true);
     expect([t!.from, t!.to]).toEqual([0, 29]);
-    expect(d.some((x) => lineClass(x, "cm-md-table-raw"))).toBe(false);
+    expect(decos(doc, doc.length).some((x) => lineClass(x, "cm-md-table-raw"))).toBe(false);
   });
   it("shows raw rows when the caret is inside", () => {
     const d = decos(doc, 2);
     expect(d.some((x) => x.widget === "TableWidget")).toBe(false);
     expect(d.filter((x) => lineClass(x, "cm-md-table-raw")).length).toBe(3);
     expect(d.some((x) => dimmed(x) && x.text === "| - | - |")).toBe(true);
+  });
+  it("renders nothing inside a table being edited, so source and rendering don't mix", () => {
+    const doc = "| a | b |\n| - | - |\n| **bold** | $x^2$ ![i](p.png) |\n\nend";
+    const d = decos(doc, 2);
+    expect(d.some((x) => x.widget === "MathWidget" || x.widget === "ImageWidget")).toBe(false);
+    expect(d.some((x) => markClass(x, "cm-md-strong") || hidden(x))).toBe(false);
+    // Only the pipes and the divider row are muted.
+    expect(d.filter(dimmed).every((x) => /^[|\s-]+$/.test(x.text))).toBe(true);
+  });
+  it("keeps a table's quote and list context", () => {
+    const nest = (doc: string) =>
+      collect(buildBlockDecorations(stateOf(doc, doc.length), true), doc).find((x) => x.widget === "TableWidget")!.widgetObj as { nest: unknown };
+    expect(nest("> | a |\n> | - |\n> | 1 |\n\nx").nest).toEqual({ quote: true, list: null });
+    expect(nest("- item\n  | a |\n  | - |\n  | 1 |\n\nx").nest).toEqual({ quote: false, list: { depth: 0, kind: "ul" } });
+    expect(nest("1. one\n   - two\n     | a |\n     | - |\n\nx").nest).toEqual({ quote: false, list: { depth: 1, kind: "ul" } });
+    expect(nest("| a |\n| - |\n\nx").nest).toEqual({ quote: false, list: null });
   });
 });
 
@@ -366,7 +383,7 @@ describe("viewport-limited builds", () => {
   it("only decorates the requested range, so cost follows the viewport", () => {
     const state = stateOf(long, 0);
     const lineTwelveEnd = state.doc.line(12).to;
-    const set = buildDecorations(state, true, { from: 0, to: state.doc.line(10).to, tables: "skip" });
+    const set = buildDecorations(state, true, { from: 0, to: state.doc.line(10).to });
     const d = collect(set, long);
     expect(d.length).toBeGreaterThan(0);
     expect(d.every((x) => x.from <= lineTwelveEnd)).toBe(true);
@@ -374,10 +391,10 @@ describe("viewport-limited builds", () => {
     expect(full.length).toBeGreaterThan(d.length * 10);
   });
 
-  it("leaves tables to the table field when asked", () => {
+  it("leaves tables to the block field", () => {
     const doc = "intro\n\n| a | b |\n| - | - |\n| 1 | 2 |\n\nend";
     const state = stateOf(doc, 0);
-    expect(collect(buildDecorations(state, true, { tables: "skip" }), doc).some((x) => x.widget === "TableWidget")).toBe(false);
+    expect(collect(buildDecorations(state, true), doc).some((x) => x.widget === "TableWidget")).toBe(false);
     const tables = collect(buildBlockDecorations(state, true), doc);
     expect(tables.map((x) => [x.widget, x.block])).toEqual([["TableWidget", true]]);
     // With the caret inside, the table is raw and the field adds nothing.

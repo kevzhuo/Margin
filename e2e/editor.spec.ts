@@ -184,6 +184,24 @@ test("Mod+B wraps the selection in bold", async ({ page }) => {
   await expect.poll(() => docText(page)).toContain("source of truth, never");
 });
 
+test("a task shows only its checkbox while you edit it, and Backspace at its start removes the checkbox", async ({ page }) => {
+  const line = lineWithText(page, "Decide how a table");
+  await page.evaluate(() => {
+    const view = window.__margin!.store.getState().editor!;
+    view.dispatch({ selection: { anchor: view.state.doc.toString().indexOf("Decide how a table") } });
+    view.focus();
+  });
+  // The caret's line: the checkbox, the text, and no raw "- [ ]" beside them.
+  await expect(line.locator("input[type=checkbox]")).toBeVisible();
+  await expect(line).toHaveText("Decide how a table is edited while the caret is inside it");
+  await expect(line.locator(".cm-md-mark")).toHaveCount(0);
+  // In a list, the text then continues the item above, as in any Markdown editor.
+  await page.keyboard.press("Backspace");
+  await expect.poll(() => docText(page)).toMatch(/\n +Decide how a table is edited/);
+  expect(await docText(page)).not.toContain("- [ ] Decide how a table");
+  await expect(line.locator("input[type=checkbox]")).toHaveCount(0);
+});
+
 test("Mod+Enter turns the caret line into a task and toggles it", async ({ page }) => {
   const line = lineWithText(page, "Everything else reads like");
   await clickLine(line, 20);

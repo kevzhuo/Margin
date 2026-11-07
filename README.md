@@ -6,8 +6,9 @@ database, and nothing moves on screen when you click into a line.
 
 - **One pane, no preview toggle.** The document is always rendered. The element
   under the caret reveals its Markdown; everything else reads like a finished page.
-- **Markers live in the margin.** `#`, `>`, and `- [ ]` appear to the left of the
-  text when revealed, so headings keep their size and text never shifts.
+- **Markers live in the margin.** `#` and `>` appear to the left of the text
+  when revealed, so headings keep their size and text never shifts. A task's
+  checkbox stays a checkbox even on the line you're editing.
 - **Files are the source of truth.** The editor is CodeMirror 6 over the raw
   Markdown string with a decoration layer on top, so round trips are lossless.
 - **Native chrome.** Tauri 2 shell: a few megabytes, system webview, inset traffic
@@ -17,7 +18,7 @@ database, and nothing moves on screen when you click into a line.
 
 | Area | What works |
 | --- | --- |
-| Live preview | Headings, bold, italic, strikethrough, inline code, links, bare URLs, images, LaTeX math, bullet and numbered lists, task lists with real checkboxes, blockquotes, fenced code with syntax highlighting and a language label, tables (rendered with bold, code, links and math inside cells when the caret is outside, raw when inside), horizontal rules, escapes, YAML front matter. An image that can't be found shows its file name in a dashed box |
+| Live preview | Headings, bold, italic, strikethrough, inline code, links, bare URLs, images, LaTeX math, bullet and numbered lists, task lists with real checkboxes, blockquotes, fenced code with syntax highlighting and a language label, tables (rendered with bold, code, links and math inside cells, keeping their quote bar or list indent, and shown as plain source while the caret is inside), horizontal rules, escapes, YAML front matter. An image that can't be found shows its file name in a dashed box |
 | Images | Paste a screenshot, drag photos in from Finder or a browser, or type `/image` to pick files. Each image is copied into an `attachments` folder at the top of the vault (never overwriting: a second `photo.png` becomes `photo 2.png`) and linked with a standard relative path, so Typora, Obsidian, VS Code and GitHub show it too. A drop in the middle of a sentence lands on its own line after it. With the caret on an image's link, the picture stays visible underneath |
 | Math | `$…$` inline and `$$…$$` blocks, rendered with KaTeX (bundled, so it works offline). Moving the caret into a formula shows its TeX; blocks show a live preview under the source as you type. A formula with a mistake shows its source in red with the reason. Prices like "$5 and $10" stay text, `\$` is a literal dollar, and an unfinished `$$` never turns the rest of the note into math. `/math`, `Mod+Alt+B` or typing `$` over a selection start one |
 | Writing | Slash menu on an empty line, a formatting toolbar over selected text, typing `*`, `_`, `` ` ``, `~`, `$` or `"` over a selection wraps it, brackets close themselves, pasting a URL over text makes a link, Enter continues lists, and a find and replace bar that floats over the note with a match count and case, whole-word and regex toggles |
