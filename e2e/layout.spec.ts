@@ -229,3 +229,38 @@ test("blank lines between blocks are shorter than lines of text", async ({ page 
   });
   expect(heights.blank).toBeLessThan(heights.text * 0.8);
 });
+
+test("a task's checkbox is centred on its text at every size and font", async ({ page }) => {
+  await openApp(page);
+  await loadDoc(page, "# Tasks\n\n- [ ] My name\n");
+  for (const font of ["sans", "serif", "mono"] as const) {
+    for (const size of [13, 16, 24]) {
+      await page.evaluate(({ font, size }) => {
+        const s = window.__margin!.store.getState();
+        s.setFontFamily(font);
+        s.setFontSize(size);
+      }, { font, size });
+      // The box's middle sits level with the middle of the capital letters.
+      await expect
+        .poll(
+          () =>
+            page.evaluate(() => {
+              const line = [...document.querySelectorAll(".cm-line")].find((l) => l.textContent!.includes("My name"))!;
+              const box = line.querySelector("input")!.getBoundingClientRect();
+              const probe = document.createElement("span");
+              probe.style.cssText = "display:inline-block;width:0;height:0;vertical-align:baseline";
+              line.appendChild(probe);
+              const baseline = probe.getBoundingClientRect().top;
+              probe.remove();
+              const cs = getComputedStyle(line);
+              const ctx = document.createElement("canvas").getContext("2d")!;
+              ctx.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+              const capCentre = baseline - ctx.measureText("H").actualBoundingBoxAscent / 2;
+              return Math.abs(capCentre - (box.top + box.height / 2));
+            }),
+          { message: `${font} ${size}px` },
+        )
+        .toBeLessThan(1.5);
+    }
+  }
+});

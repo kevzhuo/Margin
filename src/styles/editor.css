@@ -428,13 +428,21 @@ html.focus-mode .editor-host .cm-editor.cm-focused .cm-line.cm-md-table-raw {
   height: 1em;
 }
 .cm-md-checkbox input {
+  --check-size: 16px;
+  /* Form controls default to their own small font; inherit the text's, so
+     the em and cap below measure the line the checkbox sits on. */
+  font: inherit;
   position: absolute;
   left: 0;
-  top: -0.15em;
+  /* The wrapper's bottom rests on the baseline. Centre the box on the
+     capital letters: half the font's cap height up from the baseline (where
+     the cap unit is missing, a typical cap height of 0.72em). */
+  top: calc(0.64em - var(--check-size) / 2);
+  top: calc(1em - 0.5cap - var(--check-size) / 2);
   appearance: none;
   -webkit-appearance: none;
-  width: 16px;
-  height: 16px;
+  width: var(--check-size);
+  height: var(--check-size);
   margin: 0;
   border: 1.5px solid var(--text-3);
   border-radius: 4px;
