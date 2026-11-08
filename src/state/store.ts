@@ -156,7 +156,6 @@ export interface AppState {
   dirty: boolean;
   saveState: SaveState;
   /** The active note changed on disk while there were unsaved edits. */
-  externalChange: boolean;
   theme: ThemePref;
   sidebarOpen: boolean;
   outlineOpen: boolean;
@@ -231,8 +230,12 @@ export interface AppState {
   deletePath(path: string): Promise<void>;
   revealPath(path: string): Promise<void>;
   copyPath(path: string): Promise<void>;
-  reloadFromDisk(): Promise<void>;
-  keepLocal(): void;
+  /**
+   * The open note changed on disk. Margin's version always wins: its own saves
+   * coming back are ignored, unsaved edits are kept and saved over the file,
+   * and a note with nothing unsaved quietly reloads.
+   */
+  syncFromDisk(): Promise<void>;
   setTheme(theme: ThemePref): void;
   cycleTheme(): void;
   toggleSidebar(): void;
@@ -329,15 +332,14 @@ export const useStore = create<AppState>((set, get) => {
   };
 
   const onWatchEvent = (event: WatchEvent) => {
-    const { activePath, dirty } = get();
+    const { activePath } = get();
     if (event.kind !== "modify") scheduleTreeRefresh();
     if (activePath && event.paths.includes(activePath)) {
       if (event.kind === "remove") {
         scheduleTreeRefresh();
         return;
       }
-      if (dirty) set({ externalChange: true });
-      else void get().reloadFromDisk();
+      void get().syncFromDisk();
     }
   };
 
@@ -404,7 +406,6 @@ export const useStore = create<AppState>((set, get) => {
         content,
         contentVersion: s.contentVersion + 1,
         dirty: false,
-        externalChange: false,
         saveState: "idle",
         renaming: s.renaming === path ? path : null,
         selectionWords: 0,
@@ -468,7 +469,6 @@ export const useStore = create<AppState>((set, get) => {
     contentVersion: 0,
     dirty: false,
     saveState: "idle",
-    externalChange: false,
     theme: settings.theme,
     sidebarOpen: settings.sidebarOpen,
     outlineOpen: settings.outlineOpen,
@@ -559,7 +559,6 @@ export const useStore = create<AppState>((set, get) => {
         activePath: null,
         content: null,
         dirty: false,
-        externalChange: false,
         headings: [],
         wordCount: 0,
         history: [],
@@ -875,27 +874,25 @@ export const useStore = create<AppState>((set, get) => {
       }
     },
 
-    async reloadFromDisk() {
+    async syncFromDisk() {
       const { backend, activePath } = get();
       if (!backend || !activePath) return;
       try {
         const content = await backend.readNote(activePath);
-        if (content === savedDoc && content === latestDoc) {
-          set({ externalChange: false });
+        // Margin's own save, reported back by the watcher (often after more typing).
+        if (content === savedDoc || content === latestDoc) return;
+        // Another program changed it. Unsaved edits win and go over the file.
+        if (get().dirty) {
+          await get().flushSave();
           return;
         }
         latestDoc = content;
         savedDoc = content;
         syncedTitle = titleFromDoc(content);
-        set((s) => ({ content, contentVersion: s.contentVersion + 1, dirty: false, externalChange: false }));
+        set((s) => ({ content, contentVersion: s.contentVersion + 1, dirty: false }));
       } catch (e) {
         fail(`Could not reload ${stripExtension(basename(activePath))}`, e);
       }
-    },
-
-    keepLocal() {
-      set({ externalChange: false });
-      void get().flushSave();
     },
 
     setTheme(theme) {

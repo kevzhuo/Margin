@@ -82,7 +82,6 @@ mark {
 .outline-item,
 .menu-item,
 .palette-item,
-.banner-button,
 .button,
 .segmented button,
 .size-value {
@@ -98,8 +97,7 @@ mark {
 .new-note:active,
 .icon-button:active:not(:disabled),
 .outline-item:active,
-.menu-item:active,
-.banner-button:active {
+.menu-item:active {
   background: var(--bg-active);
   transition-duration: 0ms;
 }
@@ -533,32 +531,6 @@ html.titlebar-overlay .app.sidebar-hidden .topbar {
 }
 .editor-host.note-enter .cm-content {
   animation: note-enter var(--dur-slow) var(--ease-out);
-}
-.banner {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin: 0 auto 8px;
-  max-width: var(--editor-measure);
-  width: calc(100% - 32px);
-  padding: 8px 8px 8px 14px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--bg-sidebar);
-  color: var(--text);
-  animation: slide-down var(--dur) var(--ease-out);
-}
-.banner span {
-  flex: 1;
-}
-.banner-button {
-  padding: 3px 10px;
-  border-radius: var(--radius-sm);
-  box-shadow: inset 0 0 0 1px var(--border);
-  background: var(--bg);
-}
-.banner-button:hover {
-  background: var(--bg-hover);
 }
 .statusbar {
   position: absolute;

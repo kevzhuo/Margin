@@ -121,7 +121,7 @@ describe("autosave", () => {
 });
 
 describe("external changes", () => {
-  it("reloads a clean note when it changes on disk", async () => {
+  it("reloads a note with nothing unsaved when another program changes it", async () => {
     const store = await fresh();
     const before = store.getState().contentVersion;
     await backend.writeNote(DESIGN, "# from disk");
@@ -129,31 +129,38 @@ describe("external changes", () => {
     await vi.advanceTimersByTimeAsync(10);
     expect(store.getState().content).toBe("# from disk");
     expect(store.getState().contentVersion).toBe(before + 1);
-    expect(store.getState().externalChange).toBe(false);
   });
-  it("flags a conflict when there are unsaved edits", async () => {
+
+  it("keeps Margin's unsaved edits over a change made elsewhere, without asking", async () => {
     const store = await fresh();
     store.getState().updateContent("local edit");
     await backend.writeNote(DESIGN, "# from disk");
+    const before = store.getState().contentVersion;
     backend.fire({ kind: "modify", paths: [DESIGN] });
     await vi.advanceTimersByTimeAsync(10);
-    expect(store.getState().externalChange).toBe(true);
-    expect(store.getState().content).not.toBe("# from disk");
-    // Keep mine: saves the local text over the disk version.
-    store.getState().keepLocal();
-    await vi.advanceTimersByTimeAsync(10);
-    expect(store.getState().externalChange).toBe(false);
+    expect(store.getState().contentVersion).toBe(before);
+    expect(store.getState().dirty).toBe(false);
     expect(await backend.readNote(DESIGN)).toBe("local edit");
   });
-  it("reloadFromDisk replaces local edits", async () => {
+
+  it("ignores its own save coming back while you keep typing", async () => {
     const store = await fresh();
-    store.getState().updateContent("local edit");
-    await backend.writeNote(DESIGN, "# from disk");
+    store.getState().updateContent("first draft");
+    await store.getState().flushSave();
+    // More typing, not saved yet, when the watcher reports the save.
+    store.getState().updateContent("first draft, continued");
+    backend.writes.length = 0;
+    const before = store.getState().contentVersion;
     backend.fire({ kind: "modify", paths: [DESIGN] });
-    await store.getState().reloadFromDisk();
-    expect(store.getState().content).toBe("# from disk");
-    expect(store.getState().dirty).toBe(false);
+    await vi.advanceTimersByTimeAsync(10);
+    expect(store.getState().contentVersion).toBe(before);
+    expect(store.getState().dirty).toBe(true);
+    // Nothing was forced: the edit saves on the usual schedule.
+    expect(backend.writes).toEqual([]);
+    await vi.advanceTimersByTimeAsync(mod.SAVE_DELAY_MS);
+    expect(await backend.readNote(DESIGN)).toBe("first draft, continued");
   });
+
   it("ignores a modify event for a note that matches what we saved", async () => {
     const store = await fresh();
     const before = store.getState().contentVersion;
@@ -161,6 +168,7 @@ describe("external changes", () => {
     await vi.advanceTimersByTimeAsync(10);
     expect(store.getState().contentVersion).toBe(before);
   });
+
   it("refreshes the tree on create and remove events", async () => {
     const store = await fresh();
     await backend.writeNote(`${R}/Fresh.md`, "# fresh");
@@ -169,6 +177,7 @@ describe("external changes", () => {
     expect(store.getState().tree.some((n) => n.name === "Fresh.md")).toBe(true);
   });
 });
+
 
 describe("files", () => {
   it("creates a note and opens it with its title selected for typing", async () => {

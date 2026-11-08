@@ -17,12 +17,6 @@
     transform: translateY(-4px) scale(0.98);
   }
 }
-@keyframes pop-out {
-  to {
-    opacity: 0;
-    transform: translateY(-2px) scale(0.98);
-  }
-}
 /* Popovers anchored below their content (settings) rise instead. */
 @keyframes rise-in {
   from {
@@ -59,12 +53,6 @@
   to {
     opacity: 0;
     transform: translateY(6px) scale(0.98);
-  }
-}
-@keyframes slide-down {
-  from {
-    opacity: 0;
-    transform: translateY(-6px);
   }
 }
 /* Opacity only: CodeMirror measures positions from the live DOM, so a moving

@@ -106,9 +106,6 @@ export function EditorPane() {
   const contentVersion = useStore((s) => s.contentVersion);
   const jumpVersion = useStore((s) => s.jumpVersion);
   const backend = useStore((s) => s.backend);
-  const externalChange = useStore((s) => s.externalChange);
-  const reloadFromDisk = useStore((s) => s.reloadFromDisk);
-  const keepLocal = useStore((s) => s.keepLocal);
   const fontSize = useStore((s) => s.fontSize);
   const fontFamily = useStore((s) => s.fontFamily);
   const lineWidth = useStore((s) => s.lineWidth);
@@ -255,17 +252,6 @@ export function EditorPane() {
 
   return (
     <div className="editor-pane">
-      {externalChange && (
-        <div className="banner" role="alert">
-          <span>This note changed on disk.</span>
-          <button className="banner-button" onClick={() => void reloadFromDisk()}>
-            Reload
-          </button>
-          <button className="banner-button" onClick={keepLocal}>
-            Keep mine
-          </button>
-        </div>
-      )}
       <div
         ref={hostRef}
         className="editor-host"
