@@ -38,9 +38,25 @@ test("brackets close themselves and are stepped over", async ({ page }) => {
   expect(await docText(page)).toMatch(/See \(\)$/);
   await page.keyboard.type("notes)");
   expect(await docText(page)).toMatch(/See \(notes\)$/);
-  // Quotes are not paired, so apostrophes stay single.
+  // Quotes are not paired, so an apostrophe stays single (and curly).
   await page.keyboard.type(" it's");
-  expect(await docText(page)).toMatch(/See \(notes\) it's$/);
+  expect(await docText(page)).toMatch(/See \(notes\) it’s$/);
+});
+
+test("smart typography curls quotes and makes dashes as you type, and undo brings back what you typed", async ({ page }) => {
+  await caretToEnd(page);
+  await page.keyboard.press("Enter");
+  await page.keyboard.type(`She said "it's done"--mostly...`);
+  expect(await docText(page)).toMatch(/She said “it’s done”—mostly…$/);
+  await page.keyboard.press("ControlOrMeta+z");
+  expect(await docText(page)).toMatch(/She said “it’s done”—mostly\.\.\.$/);
+  // Code stays as typed.
+  await page.keyboard.type(' `x = "y"`');
+  expect(await docText(page)).toMatch(/ `x = "y"`$/);
+  // And it can be turned off.
+  await page.evaluate(() => window.__margin!.store.getState().setSmartTypography(false));
+  await page.keyboard.type(' "plain"');
+  expect(await docText(page)).toMatch(/ "plain"$/);
 });
 
 test("pasting a URL over selected text makes a link", async ({ page }) => {
@@ -54,10 +70,24 @@ test("pasting a URL over selected text makes a link", async ({ page }) => {
 });
 
 test("the status bar counts selected words and estimates reading time", async ({ page }) => {
-  await expect(page.locator(".reading-time")).toHaveText("1 min read");
   const total = Number((await page.locator(".word-count").textContent())!.replace(/\D/g, ""));
   await selectText(page, "Files on disk are the source of truth");
   await expect(page.locator(".word-count")).toHaveText(`8 of ${total} words`);
+});
+
+test("reading time shows only once a note takes a minute to read", async ({ page }) => {
+  await page.evaluate(async () => {
+    await window.__margin!.store.getState().createNote(undefined, "Short");
+    const view = window.__margin!.store.getState().editor!;
+    view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: "# Short\n\nJust a few words." } });
+  });
+  await expect(page.locator(".word-count")).toHaveText("5 words");
+  await expect(page.locator(".reading-time")).toHaveCount(0);
+  await page.evaluate(() => {
+    const view = window.__margin!.store.getState().editor!;
+    view.dispatch({ changes: { from: view.state.doc.length, insert: "\n\n" + "word ".repeat(600) } });
+  });
+  await expect(page.locator(".reading-time")).toHaveText("3 min read");
 });
 
 test("settings change the text size, font and line width", async ({ page }) => {
@@ -126,4 +156,32 @@ test("typewriter mode keeps the caret near the middle while typing", async ({ pa
     });
   await expect.poll(ratio, { timeout: 3000 }).toBeGreaterThan(0.3);
   await expect.poll(ratio, { timeout: 3000 }).toBeLessThan(0.6);
+});
+
+test("reading mode hides all Markdown, blocks typing, and Shift+Cmd+E goes back to editing", async ({ page }) => {
+  // On the heading line the "#" shows while editing.
+  await clickLine(lineWithText(page, "Principles"));
+  await expect(page.locator(".cm-line.cm-md-h2 .cm-md-margin-mark")).toHaveCount(1);
+  const before = await docText(page);
+
+  await page.keyboard.press("ControlOrMeta+Shift+E");
+  await expect(page.getByRole("button", { name: "Reading mode" })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator(".reading-label")).toHaveText("Reading");
+  await expect(page.locator(".cm-content")).toHaveAttribute("contenteditable", "false");
+  // Nothing is revealed, even on the line the caret was on.
+  await expect(page.locator(".cm-md-margin-mark")).toHaveCount(0);
+  await expect(page.locator(".cm-md-mark")).toHaveCount(0);
+  // Typing changes nothing and explains why.
+  await page.keyboard.type("x");
+  expect(await docText(page)).toBe(before);
+  await expect(page.locator(".toast")).toContainText("Reading mode is on");
+  // Tasks can still be ticked.
+  await page.locator(".cm-md-checkbox input").nth(1).click();
+  expect(await docText(page)).toContain("- [x] Decide how a table is edited");
+
+  await page.keyboard.press("ControlOrMeta+Shift+E");
+  await expect(page.getByRole("button", { name: "Reading mode" })).toHaveAttribute("aria-pressed", "false");
+  await expect(page.locator(".cm-content")).toBeFocused();
+  await page.keyboard.type("!");
+  expect(await docText(page)).not.toBe(before);
 });

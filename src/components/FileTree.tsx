@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState, type DragEvent, type KeyboardEvent, type MouseEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent, type MouseEvent } from "react";
 import { dirname, isWithin, platform, stripExtension, type FileNode } from "../backend";
 import { useStore } from "../state/store";
+import { sortTree } from "../state/treeSort";
 import { confirmAndDelete, formatShortcut } from "../state/appCommands";
 import { ChevronRight, Folder } from "./icons";
 import { ContextMenu, type MenuItem } from "./ContextMenu";
@@ -160,7 +161,9 @@ function Row({ node, depth, onMenu, dropTarget, onDragStart }: RowProps) {
 const fileManagerLabel = () => (platform() === "macos" ? "Show in Finder" : platform() === "windows" ? "Show in Explorer" : "Show in file manager");
 
 export function FileTree() {
-  const tree = useStore((s) => s.tree);
+  const fullTree = useStore((s) => s.tree);
+  const sortBy = useStore((s) => s.sortBy);
+  const tree = useMemo(() => sortTree(fullTree, sortBy), [fullTree, sortBy]);
   const vaultRoot = useStore((s) => s.vaultRoot);
   const backend = useStore((s) => s.backend);
   const expandedDirs = useStore((s) => s.expandedDirs);

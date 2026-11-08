@@ -11,7 +11,8 @@ export function StatusBar() {
   const activePath = useStore((s) => s.activePath);
   if (!activePath) return null;
   const status = saveState === "error" ? "Save failed" : dirty || saveState === "saving" ? "Saving…" : "";
-  const minutes = Math.max(1, Math.round(wordCount / READING_WPM));
+  // A note you can read in under a minute doesn't need a reading time.
+  const minutes = wordCount >= READING_WPM ? Math.round(wordCount / READING_WPM) : 0;
   const words = (n: number) => `${n.toLocaleString()} ${n === 1 ? "word" : "words"}`;
   return (
     <div className="statusbar" aria-live="polite">
@@ -24,7 +25,7 @@ export function StatusBar() {
         ) : (
           <span className="word-count">{words(wordCount)}</span>
         )}
-        {wordCount > 0 && <span className="reading-time">{minutes} min read</span>}
+        {minutes > 0 && <span className="reading-time">{minutes} min read</span>}
       </span>
     </div>
   );

@@ -16,6 +16,10 @@ export interface FileNode {
   path: string;
   kind: "file" | "dir";
   children?: FileNode[];
+  /** Last modified, in milliseconds since 1970, when known. */
+  modified?: number;
+  /** Created, in milliseconds since 1970, when the file system records it. */
+  created?: number;
 }
 
 export type WatchEventKind = "create" | "modify" | "remove" | "rename" | "any";

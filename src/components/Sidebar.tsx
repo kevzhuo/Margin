@@ -1,9 +1,11 @@
-import { useRef, type PointerEvent } from "react";
+import { useRef, useState, type PointerEvent } from "react";
 import { basename } from "../backend";
 import { SIDEBAR_WIDTH_DEFAULT, SIDEBAR_WIDTH_MAX, SIDEBAR_WIDTH_MIN, useStore } from "../state/store";
 import { formatShortcut } from "../state/appCommands";
+import { SORT_LABELS, type SortBy } from "../state/treeSort";
 import { FileTree } from "./FileTree";
-import { Book, ChevronDown, FilePlus, FolderPlus, Gear, Monitor, Moon, Plus, Search, Sun } from "./icons";
+import { ContextMenu } from "./ContextMenu";
+import { Book, ChevronDown, FilePlus, FolderPlus, Gear, Monitor, Moon, Plus, Search, SortLines, Sun } from "./icons";
 
 function Resizer() {
   const setSidebarWidth = useStore((s) => s.setSidebarWidth);
@@ -60,6 +62,10 @@ export function Sidebar() {
   const createFolder = useStore((s) => s.createFolder);
   const openPalette = useStore((s) => s.openPalette);
   const setSettingsOpen = useStore((s) => s.setSettingsOpen);
+  const [filesScrolled, setFilesScrolled] = useState(false);
+  const sortBy = useStore((s) => s.sortBy);
+  const setSortBy = useStore((s) => s.setSortBy);
+  const [sortMenu, setSortMenu] = useState<{ x: number; y: number } | null>(null);
 
   const vaultName = vaultRoot ? basename(vaultRoot) || vaultRoot : "No vault";
   const themeLabel = theme === "system" ? "Theme: follows system" : theme === "light" ? "Theme: light" : "Theme: dark";
@@ -67,7 +73,7 @@ export function Sidebar() {
   return (
     <aside className="sidebar" aria-label="Sidebar">
       <div className="sidebar-top" data-tauri-drag-region="" />
-      <div className="sidebar-body">
+      <div className="sidebar-head">
         <button
           className="vault-row"
           onClick={() => void openVault()}
@@ -84,8 +90,24 @@ export function Sidebar() {
           <kbd>{formatShortcut("Mod+P")}</kbd>
         </button>
         <div className="section-header">
-          <div className="section-label">Files</div>
-          <div className="section-actions">
+          <div className="section-label">
+            Files
+            {sortBy !== "name" && <span className="section-sort"> · {SORT_LABELS[sortBy]}</span>}
+          </div>
+          <div className={`section-actions${sortMenu ? " held" : ""}`}>
+            <button
+              className={`icon-button small${sortBy !== "name" ? " on" : ""}`}
+              onClick={(e) => {
+                const r = e.currentTarget.getBoundingClientRect();
+                setSortMenu(sortMenu ? null : { x: r.left, y: r.bottom + 4 });
+              }}
+              disabled={!vaultRoot}
+              aria-label={`Sort notes: ${SORT_LABELS[sortBy]}`}
+              aria-haspopup="menu"
+              title={`Sort by ${SORT_LABELS[sortBy].toLowerCase()}`}
+            >
+              <SortLines size={14} />
+            </button>
             <button className="icon-button small" onClick={() => void createNote()} disabled={!vaultRoot} aria-label="New note in vault" title={`New note (${formatShortcut("Mod+N")})`}>
               <FilePlus size={14} />
             </button>
@@ -94,6 +116,9 @@ export function Sidebar() {
             </button>
           </div>
         </div>
+      </div>
+      {/* Only the files scroll; the vault, search and section header stay put. */}
+      <div className="sidebar-files" data-scrolled={filesScrolled || undefined} onScroll={(e) => setFilesScrolled(e.currentTarget.scrollTop > 2)}>
         <FileTree />
       </div>
       <div className="sidebar-foot">
@@ -117,6 +142,14 @@ export function Sidebar() {
         </button>
       </div>
       <Resizer />
+      {sortMenu && (
+        <ContextMenu
+          x={sortMenu.x}
+          y={sortMenu.y}
+          items={(Object.keys(SORT_LABELS) as SortBy[]).map((by) => ({ label: SORT_LABELS[by], checked: by === sortBy, onSelect: () => setSortBy(by) }))}
+          onClose={() => setSortMenu(null)}
+        />
+      )}
     </aside>
   );
 }

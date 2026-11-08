@@ -143,10 +143,22 @@ const DEFAULT_FILES: Record<string, string> = {
   [`${DEMO_ROOT}/Inbox.md`]: INBOX,
 };
 
+interface FileTimes {
+  created: number;
+  modified: number;
+}
+
 interface Persisted {
   files: Record<string, string>;
   /** Folders that exist even when empty. */
   dirs?: string[];
+  times?: Record<string, FileTimes>;
+}
+
+/** Demo notes get times an hour apart, newest first in the listing order, so sorting by date shows something. */
+function demoTimes(files: Record<string, string>): Record<string, FileTimes> {
+  const now = Date.now();
+  return Object.fromEntries(Object.keys(files).map((path, i) => [path, { created: now - (i + 1) * 7_200_000, modified: now - (i + 1) * 3_600_000 }]));
 }
 
 function load(): Persisted {
@@ -154,12 +166,13 @@ function load(): Persisted {
     const raw = globalThis.localStorage?.getItem(STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw) as Persisted;
-      if (parsed && parsed.files && typeof parsed.files === "object") return { files: { ...parsed.files }, dirs: parsed.dirs ?? [] };
+      if (parsed && parsed.files && typeof parsed.files === "object")
+        return { files: { ...parsed.files }, dirs: parsed.dirs ?? [], times: { ...demoTimes(parsed.files), ...parsed.times } };
     }
   } catch {
     // ignore storage failures (private mode, quota, etc.)
   }
-  return { files: { ...DEFAULT_FILES }, dirs: [] };
+  return { files: { ...DEFAULT_FILES }, dirs: [], times: demoTimes(DEFAULT_FILES) };
 }
 
 /**
@@ -170,6 +183,7 @@ export class MemoryBackend implements VaultBackend {
   readonly kind = "memory" as const;
   private files: Record<string, string>;
   private dirs: Set<string>;
+  private times: Record<string, FileTimes>;
   private listeners = new Set<(e: WatchEvent) => void>();
   /** Saved images: path to an object URL. Kept in memory only; images are too big for localStorage. */
   private assets = new Map<string, string>();
@@ -178,16 +192,24 @@ export class MemoryBackend implements VaultBackend {
     if (initial) {
       this.files = { ...initial };
       this.dirs = new Set(initialDirs);
+      this.times = demoTimes(initial);
     } else {
       const loaded = load();
       this.files = loaded.files;
       this.dirs = new Set(loaded.dirs ?? []);
+      this.times = loaded.times ?? demoTimes(loaded.files);
     }
+  }
+
+  /** Record a write: the file is modified now, and created now if it is new. */
+  private touch(path: string) {
+    const now = Date.now();
+    this.times[path] = { created: this.times[path]?.created ?? now, modified: now };
   }
 
   private persist() {
     try {
-      globalThis.localStorage?.setItem(STORAGE_KEY, JSON.stringify({ files: this.files, dirs: [...this.dirs] } satisfies Persisted));
+      globalThis.localStorage?.setItem(STORAGE_KEY, JSON.stringify({ files: this.files, dirs: [...this.dirs], times: this.times } satisfies Persisted));
     } catch {
       // ignore
     }
@@ -207,6 +229,7 @@ export class MemoryBackend implements VaultBackend {
   reset() {
     this.files = { ...DEFAULT_FILES };
     this.dirs = new Set();
+    this.times = demoTimes(DEFAULT_FILES);
     this.persist();
   }
 
@@ -243,7 +266,7 @@ export class MemoryBackend implements VaultBackend {
     }
     for (const path of Object.keys(this.files)) {
       if (!path.startsWith(prefix) || !isMarkdown(path)) continue;
-      ensureDir(dirname(path)).push({ name: basename(path), path, kind: "file" });
+      ensureDir(dirname(path)).push({ name: basename(path), path, kind: "file", ...this.times[path] });
     }
 
     const sort = (list: FileNode[]) => {
@@ -264,6 +287,7 @@ export class MemoryBackend implements VaultBackend {
 
   async writeNote(path: string, content: string): Promise<void> {
     this.files[path] = content;
+    this.touch(path);
     this.persist();
   }
 
@@ -276,6 +300,7 @@ export class MemoryBackend implements VaultBackend {
       i++;
     }
     this.files[candidate] = `# ${basename(candidate).replace(/\.md$/i, "")}\n\n`;
+    this.touch(candidate);
     this.persist();
     this.emit({ kind: "create", paths: [candidate] });
     return candidate;
@@ -298,15 +323,22 @@ export class MemoryBackend implements VaultBackend {
   async renamePath(from: string, to: string): Promise<void> {
     if (this.files[to] !== undefined || this.dirExists(to)) throw new Error(`Already exists: ${to}`);
     if (to !== from && isWithin(to, from)) throw new Error("Cannot move a folder into itself");
+    // A move keeps a file's times, as it does on disk.
+    const moveTimes = (a: string, b: string) => {
+      if (this.times[a]) this.times[b] = this.times[a];
+      delete this.times[a];
+    };
     if (this.files[from] !== undefined) {
       this.files[to] = this.files[from];
       delete this.files[from];
+      moveTimes(from, to);
     } else if (this.dirExists(from)) {
       const prefix = from + "/";
       const moved: Record<string, string> = {};
       for (const [p, c] of Object.entries(this.files)) {
         if (p.startsWith(prefix)) {
           moved[joinPath(to, p.slice(prefix.length))] = c;
+          moveTimes(p, joinPath(to, p.slice(prefix.length)));
           delete this.files[p];
         }
       }
@@ -324,9 +356,14 @@ export class MemoryBackend implements VaultBackend {
   async deletePath(path: string): Promise<void> {
     if (this.files[path] !== undefined) {
       delete this.files[path];
+      delete this.times[path];
     } else {
       const prefix = path + "/";
-      for (const p of Object.keys(this.files)) if (p.startsWith(prefix)) delete this.files[p];
+      for (const p of Object.keys(this.files)) {
+        if (!p.startsWith(prefix)) continue;
+        delete this.files[p];
+        delete this.times[p];
+      }
       for (const d of [...this.dirs]) if (d === path || d.startsWith(prefix)) this.dirs.delete(d);
     }
     this.persist();

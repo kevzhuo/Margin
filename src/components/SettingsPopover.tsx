@@ -67,6 +67,7 @@ export function SettingsPopover() {
   const focusMode = useStore((s) => s.focusMode);
   const typewriter = useStore((s) => s.typewriter);
   const smoothCaret = useStore((s) => s.smoothCaret);
+  const smartTypography = useStore((s) => s.smartTypography);
   const titleSync = useStore((s) => s.titleSync);
   const { mounted, closing } = usePresence(open, 140);
   const ref = useRef<HTMLDivElement>(null);
@@ -159,6 +160,7 @@ export function SettingsPopover() {
       <Toggle label="Focus mode" hint={formatShortcut("F8")} checked={focusMode} onChange={s.setFocusMode} />
       <Toggle label="Typewriter mode" hint={formatShortcut("F9")} checked={typewriter} onChange={s.setTypewriter} />
       <Toggle label="Smooth caret" checked={smoothCaret} onChange={s.setSmoothCaret} />
+      <Toggle label="Smart quotes and dashes" checked={smartTypography} onChange={s.setSmartTypography} />
       <Toggle label="Name notes after their title" checked={titleSync} onChange={s.setTitleSync} />
     </div>
   );

@@ -20,6 +20,15 @@ describe("extractHeadings", () => {
     expect(extractHeadings(stateOf("# \n")).map((x) => x.text)).toEqual(["Untitled"]);
   });
 
+  it("marks the title: a first-line # heading, after any front matter", () => {
+    const titled = (doc: string) => extractHeadings(stateOf(doc)).map((h) => !!h.title);
+    expect(titled("# Title\n\n## A\n\n# Later\n")).toEqual([true, false, false]);
+    expect(titled("---\ntags: [x]\n---\n\n# Title\n\n## A\n")).toEqual([true, false]);
+    // Text before the first heading means the note has no title.
+    expect(titled("Intro\n\n# Heading\n")).toEqual([false]);
+    expect(titled("## Section\n\n# Heading\n")).toEqual([false, false]);
+    expect(titled("Setext\n======\n")).toEqual([false]);
+  });
 });
 
 describe("countWords", () => {

@@ -7,7 +7,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 test("new folder, rename it, and drag a note into it", async ({ page }) => {
-  await page.locator(".sidebar-body").hover();
+  await page.locator(".sidebar-head").hover();
   await page.getByRole("button", { name: "New folder" }).click();
   const input = page.locator(".rename-input");
   await expect(input).toBeFocused();
@@ -81,4 +81,37 @@ test("the sidebar can be resized and reset", async ({ page }) => {
   await expect.poll(async () => Math.round((await shell.boundingBox())!.width)).toBe(320);
   await handle.dblclick();
   await expect.poll(async () => Math.round((await shell.boundingBox())!.width)).toBe(240);
+});
+
+test("sorting by last edited puts the note you just edited first, and the choice is remembered", async ({ page }) => {
+  const projectRows = page.locator('.tree-row[data-kind="dir"]', { hasText: "Projects" }).locator("xpath=..").locator(".tree-children .tree-row");
+  await expect(projectRows).toHaveText(["Editor design notes", "Roadmap", "Tauri vs Electron"]);
+
+  await page.locator(".sidebar-head").hover();
+  await page.getByRole("button", { name: /Sort notes/ }).click();
+  await expect(page.getByRole("menuitemradio", { name: "Name" })).toHaveAttribute("aria-checked", "true");
+  await page.getByRole("menuitemradio", { name: "Last edited" }).click();
+  await expect(page.locator(".sidebar .section-label")).toHaveText("Files · Last edited");
+
+  // Edit Roadmap: it moves to the top of its folder once saved.
+  await page.locator(".tree-row", { hasText: "Roadmap" }).click();
+  await page.evaluate(async () => {
+    const st = window.__margin!.store.getState();
+    st.editor!.dispatch({ changes: { from: st.editor!.state.doc.length, insert: "\nMore." } });
+    await st.flushSave();
+  });
+  await expect(projectRows.first()).toHaveText("Roadmap");
+  await expect(page.locator('.sidebar .tree > .tree-node > .tree-row').first()).toHaveText("Projects");
+
+  await page.reload();
+  await page.waitForSelector('.app[data-ready="true"]');
+  await expect(page.locator(".sidebar .section-label")).toHaveText("Files · Last edited");
+  await expect(projectRows.first()).toHaveText("Roadmap");
+
+  // Back to name order.
+  await page.locator(".sidebar-head").hover();
+  await page.getByRole("button", { name: /Sort notes/ }).click();
+  await page.getByRole("menuitemradio", { name: "Name" }).click();
+  await expect(projectRows).toHaveText(["Editor design notes", "Roadmap", "Tauri vs Electron"]);
+  await expect(page.locator(".sidebar .section-label")).toHaveText("Files");
 });

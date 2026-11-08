@@ -15,6 +15,9 @@ import {
 import type { Heading } from "../editor/outline";
 import { fileNameFromTitle, isPlaceholderName, replaceTitle, titleFromDoc } from "./title";
 import { ATTACHMENTS_DIR, MAX_ATTACHMENT_BYTES, attachmentName, imageMarkdown, isImageFile, relativePath } from "./attachments";
+import { SORT_LABELS, touchFile, type SortBy } from "./treeSort";
+
+const SORT_KEYS = Object.keys(SORT_LABELS) as SortBy[];
 
 export type ThemePref = "system" | "light" | "dark";
 export type SaveState = "idle" | "saving" | "saved" | "error";
@@ -85,6 +88,10 @@ interface Settings {
   fullWidth: boolean;
   /** The caret glides between positions instead of jumping. */
   smoothCaret: boolean;
+  /** Typed quotes, `--` and `...` become curly quotes, dashes and ellipses. */
+  smartTypography: boolean;
+  /** How the sidebar orders notes. */
+  sortBy: SortBy;
   /** Editing a note's first heading renames its file (and vice versa). */
   titleSync: boolean;
   focusMode: boolean;
@@ -108,6 +115,8 @@ const defaultSettings: Settings = {
   fontFamily: "sans",
   fullWidth: false,
   smoothCaret: false,
+  smartTypography: true,
+  sortBy: "name",
   titleSync: true,
   focusMode: false,
   typewriter: false,
@@ -165,9 +174,13 @@ export interface AppState {
   fontFamily: FontFamily;
   fullWidth: boolean;
   smoothCaret: boolean;
+  smartTypography: boolean;
+  sortBy: SortBy;
   titleSync: boolean;
   focusMode: boolean;
   typewriter: boolean;
+  /** The note reads as a finished page and can't be edited. Not remembered between launches. */
+  readingMode: boolean;
   /** Whether each panel fits beside a comfortably wide editor right now. */
   sidebarFits: boolean;
   outlineFits: boolean;
@@ -247,6 +260,9 @@ export interface AppState {
   setFontFamily(family: FontFamily): void;
   setFullWidth(on: boolean): void;
   setSmoothCaret(on: boolean): void;
+  setSmartTypography(on: boolean): void;
+  setSortBy(by: SortBy): void;
+  setReadingMode(on: boolean): void;
   setTitleSync(on: boolean): void;
   setFits(sidebarFits: boolean, outlineFits: boolean): void;
   closePeeks(): void;
@@ -310,6 +326,8 @@ export const useStore = create<AppState>((set, get) => {
       fontFamily: s.fontFamily,
       fullWidth: s.fullWidth,
       smoothCaret: s.smoothCaret,
+      smartTypography: s.smartTypography,
+      sortBy: s.sortBy,
       titleSync: s.titleSync,
       focusMode: s.focusMode,
       typewriter: s.typewriter,
@@ -480,9 +498,12 @@ export const useStore = create<AppState>((set, get) => {
     fontFamily: settings.fontFamily,
     fullWidth: settings.fullWidth,
     smoothCaret: settings.smoothCaret,
+    smartTypography: settings.smartTypography,
+    sortBy: SORT_KEYS.includes(settings.sortBy) ? settings.sortBy : "name",
     titleSync: settings.titleSync,
     focusMode: settings.focusMode,
     typewriter: settings.typewriter,
+    readingMode: false,
     sidebarFits: true,
     outlineFits: true,
     sidebarPeek: false,
@@ -680,7 +701,13 @@ export const useStore = create<AppState>((set, get) => {
       try {
         await backend.writeNote(activePath, doc);
         savedDoc = doc;
-        set({ saveState: "saved", dirty: latestDoc !== savedDoc, content: doc });
+        // The watcher skips Margin's own writes, so keep "Last edited" order current here.
+        set((s) => ({
+          saveState: "saved",
+          dirty: latestDoc !== savedDoc,
+          content: doc,
+          tree: s.sortBy === "modified" ? touchFile(s.tree, activePath, Date.now()) : s.tree,
+        }));
       } catch (e) {
         set({ saveState: "error" });
         fail(`Could not save ${stripExtension(basename(activePath))}`, e);
@@ -695,6 +722,8 @@ export const useStore = create<AppState>((set, get) => {
       try {
         const clean = name?.trim().replace(/[\\/]/g, "-");
         const path = await backend.createNote(target, clean || "Untitled");
+        // A new note is for writing in.
+        set({ readingMode: false });
         await get().refreshTree();
         if (target !== vaultRoot) set((s) => ({ expandedDirs: { ...s.expandedDirs, [target]: true } }));
         if (!clean && get().titleSync) {
@@ -978,6 +1007,20 @@ export const useStore = create<AppState>((set, get) => {
     setSmoothCaret(smoothCaret) {
       set({ smoothCaret });
       persist();
+    },
+
+    setSmartTypography(smartTypography) {
+      set({ smartTypography });
+      persist();
+    },
+
+    setSortBy(sortBy) {
+      set({ sortBy });
+      persist();
+    },
+
+    setReadingMode(readingMode) {
+      set({ readingMode });
     },
 
     setTitleSync(titleSync) {

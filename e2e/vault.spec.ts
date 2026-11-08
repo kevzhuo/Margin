@@ -18,7 +18,8 @@ test("loads the demo vault with its folders, notes and outline", async ({ page }
     "Inbox",
   ]);
   await expect(tree.locator(".tree-row.selected")).toHaveText("Editor design notes");
-  await expect(page.locator(".outline-item")).toHaveText(["Editor design notes", "Principles", "Open questions", "Decoration plan"]);
+  // The title heads the page, so the outline lists only what is under it.
+  await expect(page.locator(".outline-item")).toHaveText(["Principles", "Open questions", "Decoration plan"]);
   await expect(page.locator(".crumbs")).toContainText("Projects");
   await expect(page.locator(".vault-name")).toHaveText("Demo Vault");
 });

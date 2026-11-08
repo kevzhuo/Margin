@@ -142,3 +142,19 @@ export const ArrowsInward = ({ size = 16, ...p }: IconProps) => (
     <path d="M4 8l4 4-4 4M20 8l-4 4 4 4M8 12H2M16 12h6" />
   </svg>
 );
+export const SortLines = ({ size = 16, ...p }: IconProps) => (
+  <svg {...base(size, p)}>
+    <path d="M4 6h16M4 12h11M4 18h6" />
+  </svg>
+);
+export const Check = ({ size = 14, ...p }: IconProps) => (
+  <svg {...base(size, p)} strokeWidth={2.2}>
+    <path d="M5 12.5l4.5 4.5L19 7.5" />
+  </svg>
+);
+export const BookOpen = ({ size = 16, ...p }: IconProps) => (
+  <svg {...base(size, p)}>
+    <path d="M12 7c-1.8-1.4-4.6-2-8-2v13c3.4 0 6.2.6 8 2 1.8-1.4 4.6-2 8-2V5c-3.4 0-6.2.6-8 2z" />
+    <path d="M12 7v13" />
+  </svg>
+);

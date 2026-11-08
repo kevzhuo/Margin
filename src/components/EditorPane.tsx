@@ -1,12 +1,14 @@
 import { useEffect, useRef } from "react";
 import { EditorSelection } from "@codemirror/state";
-import type { EditorView, ViewUpdate } from "@codemirror/view";
+import { EditorView, type ViewUpdate } from "@codemirror/view";
 import { createEditor, createEditorState, type CreateEditorOptions } from "../editor/createEditor";
 import { countWords, extractHeadings } from "../editor/outline";
 import { scrollToPos } from "../editor/scroll";
 import { flash } from "../editor/flash";
+import { setReadingMode } from "../editor/readingMode";
 import { dirname, findMatch, flattenFiles, resolveRelative, slugify } from "../backend";
 import { useStore, type Jump } from "../state/store";
+import { formatShortcut } from "../state/appCommands";
 
 const MAX_SELECTION_COUNT = 200_000;
 const TYPING_IDLE_MS = 1200;
@@ -110,6 +112,7 @@ export function EditorPane() {
   const fontFamily = useStore((s) => s.fontFamily);
   const lineWidth = useStore((s) => s.lineWidth);
   const typewriterOn = useStore((s) => s.typewriter);
+  const readingMode = useStore((s) => s.readingMode);
 
   const options = (): Omit<CreateEditorOptions, "parent" | "doc"> => ({
     preview: {
@@ -131,6 +134,8 @@ export function EditorPane() {
       return true;
     },
     typewriter: () => useStore.getState().typewriter,
+    smartTypography: () => useStore.getState().smartTypography,
+    readingMode: () => useStore.getState().readingMode,
   });
 
   const rememberView = (path: string | null) => {
@@ -238,6 +243,37 @@ export function EditorPane() {
     useStore.setState({ jump: null });
     applyJump(view, jump, true, jump.flash !== false);
   }, [jumpVersion]);
+
+  // Reading mode: no editing, so nothing reveals its Markdown. Leaving it puts the caret back.
+  const enteredReading = useRef(false);
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) return;
+    if (view.state.facet(EditorView.editable) === !readingMode) return;
+    setReadingMode(view, readingMode);
+    if (readingMode) {
+      enteredReading.current = true;
+      view.contentDOM.blur();
+    } else if (enteredReading.current) {
+      view.focus();
+    }
+  }, [readingMode]);
+
+  // Typing while reading does nothing, so say why (at most every few seconds).
+  useEffect(() => {
+    if (!readingMode) return;
+    let last = 0;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey || e.key.length !== 1 || e.defaultPrevented) return;
+      const target = e.target as HTMLElement | null;
+      if (target && (target.closest("input, textarea, select, [contenteditable='true']") || target.closest("[role='dialog'], [role='menu']"))) return;
+      if (Date.now() - last < 4000) return;
+      last = Date.now();
+      useStore.getState().pushToast(`Reading mode is on. Press ${formatShortcut("Mod+Shift+E")} to edit.`);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [readingMode]);
 
   // Text size, font, and measure change line heights: let CodeMirror re-measure.
   useEffect(() => {

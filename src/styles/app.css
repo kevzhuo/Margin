@@ -29,6 +29,12 @@ html.titlebar-overlay body {
 html.titlebar-overlay .sidebar {
   background: transparent;
 }
+/* In dark mode, a dark wash over the material keeps the sidebar dark and calm
+   over any wallpaper (and readable even if the material were ever light),
+   while a little of the frosted glass still shows through. */
+html.titlebar-overlay[data-theme="dark"] .sidebar {
+  background: var(--sidebar-wash);
+}
 
 html.resizing,
 html.resizing * {
@@ -188,14 +194,26 @@ html.resizing .sidebar-shell,
 html.titlebar-overlay .sidebar-top {
   height: var(--topbar-height);
 }
-.sidebar-body {
+.sidebar-head {
   padding: 0 10px;
   display: flex;
   flex-direction: column;
   gap: 1px;
+  flex: none;
+}
+.sidebar-files {
+  padding: 0 10px;
+  display: flex;
+  flex-direction: column;
   flex: 1;
   overflow: auto;
   min-height: 0;
+  /* A hairline under the section header once the list is scrolled. */
+  box-shadow: inset 0 1px 0 transparent;
+  transition: box-shadow var(--dur) var(--ease-out);
+}
+.sidebar-files[data-scrolled] {
+  box-shadow: inset 0 1px 0 var(--border);
 }
 .sidebar-resizer {
   position: absolute;
@@ -295,9 +313,13 @@ html.resizing .sidebar-resizer::after {
   opacity: 0;
   transition: opacity var(--dur) var(--ease-out);
 }
-.sidebar-body:hover .section-actions,
-.section-actions:focus-within {
+.sidebar:hover .section-actions,
+.section-actions:focus-within,
+.section-actions.held {
   opacity: 1;
+}
+.section-sort {
+  font-weight: 500;
 }
 
 /* ---------- File tree ---------- */
@@ -514,6 +536,19 @@ html.titlebar-overlay .app.sidebar-hidden .topbar {
   display: flex;
   gap: 2px;
 }
+/* In reading mode the button widens to say so, since typing does nothing. */
+.icon-button.reading-toggle.on {
+  width: auto;
+  gap: 6px;
+  padding: 0 10px 0 8px;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.reading-label {
+  font-size: 12px;
+  font-weight: 500;
+  animation: fade-in var(--dur) var(--ease-out);
+}
 
 .editor-pane {
   flex: 1;
@@ -611,10 +646,10 @@ html.titlebar-overlay .outline {
   height: 28px;
   border-radius: var(--radius-md);
   background: var(--bg-selected);
-  transform: translateY(calc(var(--current) * 28px));
   opacity: 0;
   transition:
     transform var(--dur) var(--ease-out),
+    height var(--dur) var(--ease-out),
     opacity var(--dur) var(--ease-out);
   pointer-events: none;
 }
@@ -625,27 +660,21 @@ html.titlebar-overlay .outline {
   position: relative;
   display: block;
   width: 100%;
-  height: 28px;
-  line-height: 20px;
-  padding: 4px 8px;
+  line-height: 18px;
+  padding: 5px 8px 5px calc(8px + var(--depth, 0) * 12px);
   border-radius: var(--radius-md);
   color: var(--text-2);
-  white-space: nowrap;
+}
+/* Long headings wrap to a second line, then end in an ellipsis. */
+.outline-text {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
   overflow: hidden;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
 }
-.outline-item.level-1 {
-  font-weight: 500;
+.outline-item.top {
   color: var(--text);
-}
-.outline-item.level-2 {
-  padding-left: 20px;
-}
-.outline-item.level-3 {
-  padding-left: 32px;
-}
-.outline-item.level-4 {
-  padding-left: 44px;
 }
 .outline-item:hover {
   background: var(--bg-hover);
@@ -872,6 +901,14 @@ html.titlebar-overlay .outline {
 }
 .menu-item.danger {
   color: var(--danger);
+}
+.menu-label {
+  flex: 1;
+}
+.menu-check {
+  width: 14px;
+  margin-right: -8px;
+  color: var(--accent);
 }
 .menu-hint {
   color: var(--text-3);

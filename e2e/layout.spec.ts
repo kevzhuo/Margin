@@ -264,3 +264,39 @@ test("a task's checkbox is centred on its text at every size and font", async ({
     }
   }
 });
+
+test("the outline leaves out the title and wraps long headings, with the highlight covering both lines", async ({ page }) => {
+  await openApp(page);
+  await page.evaluate(async () => {
+    await window.__margin!.store.getState().createNote("/Demo Vault/Projects", "Outline");
+    const view = window.__margin!.store.getState().editor!;
+    const doc = "# Outline\n\n## A very long heading that goes on and on so that it has to wrap in the outline panel\n\nText\n\n## Short\n";
+    view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: doc }, selection: { anchor: doc.indexOf("Text") } });
+    view.focus();
+  });
+  const items = page.locator(".outline-item");
+  await expect(items).toHaveCount(2);
+  const long = items.first();
+  await expect(long).toHaveClass(/\bon\b/);
+  const box = (await long.boundingBox())!;
+  expect(box.height).toBeGreaterThan(40); // two lines
+  await expect
+    .poll(async () => (await page.locator(".outline-indicator").boundingBox())?.height)
+    .toBeCloseTo(box.height, 0);
+});
+
+test("the vault name and search stay put while the file list scrolls", async ({ page }) => {
+  await openApp(page);
+  await page.evaluate(async () => {
+    const st = window.__margin!.store.getState();
+    for (let i = 1; i <= 40; i++) await st.backend!.createNote("/Demo Vault/Reading", `Book ${i}`);
+    await st.refreshTree();
+  });
+  const search = page.getByRole("button", { name: "Search notes" });
+  const top = (await search.boundingBox())!.y;
+  await page.locator(".sidebar-files").hover();
+  await page.mouse.wheel(0, 2000);
+  await expect.poll(() => page.locator(".sidebar-files").evaluate((el) => el.scrollTop)).toBeGreaterThan(100);
+  expect((await search.boundingBox())!.y).toBe(top);
+  await expect(page.locator(".sidebar-files")).toHaveAttribute("data-scrolled", "true");
+});

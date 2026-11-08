@@ -54,6 +54,12 @@ pub struct FileNode {
     pub kind: &'static str,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub children: Option<Vec<FileNode>>,
+    /// Last modified, in milliseconds since the Unix epoch, for sorting.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub modified: Option<u64>,
+    /// Created, in milliseconds since the Unix epoch, where the file system records it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub created: Option<u64>,
 }
 
 #[derive(Serialize, Clone, Debug, PartialEq, Eq)]
@@ -268,6 +274,12 @@ fn natural_cmp(a: &str, b: &str) -> Ordering {
     }
 }
 
+/// A file time in milliseconds since the Unix epoch, if the file system has it.
+fn millis(time: std::io::Result<SystemTime>) -> Option<u64> {
+    let since = time.ok()?.duration_since(UNIX_EPOCH).ok()?;
+    u64::try_from(since.as_millis()).ok()
+}
+
 fn sort_nodes(nodes: &mut [FileNode]) {
     nodes.sort_by(|a, b| match (a.kind, b.kind) {
         ("dir", "file") => Ordering::Less,
@@ -294,6 +306,10 @@ pub fn list_tree_at(dir: &Path) -> Result<Vec<FileNode>, String> {
             continue;
         }
         let path = entry.path();
+        let (modified, created) = match entry.metadata() {
+            Ok(meta) => (millis(meta.modified()), millis(meta.created())),
+            Err(_) => (None, None),
+        };
         if file_type.is_dir() {
             let children = list_tree_at(&path)?;
             nodes.push(FileNode {
@@ -301,6 +317,8 @@ pub fn list_tree_at(dir: &Path) -> Result<Vec<FileNode>, String> {
                 path: display_path(&path),
                 kind: "dir",
                 children: Some(children),
+                modified,
+                created,
             });
         } else if file_type.is_file() && is_markdown(&name) {
             nodes.push(FileNode {
@@ -308,6 +326,8 @@ pub fn list_tree_at(dir: &Path) -> Result<Vec<FileNode>, String> {
                 path: display_path(&path),
                 kind: "file",
                 children: None,
+                modified,
+                created,
             });
         }
     }
@@ -920,6 +940,12 @@ mod tests {
         for n in &tree {
             assert!(Path::new(&n.path).is_absolute());
         }
+        // Every entry carries its modified time, for sorting by last edited.
+        let inbox = tree.iter().find(|n| n.name == "Inbox.md").unwrap();
+        let now = millis(Ok(SystemTime::now())).unwrap();
+        let modified = inbox.modified.expect("modified time");
+        assert!(modified <= now && now - modified < 60_000);
+        assert!(projects.modified.is_some());
     }
 
     #[test]

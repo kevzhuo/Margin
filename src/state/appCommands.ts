@@ -1,6 +1,7 @@
 import { openSearchPanel } from "@codemirror/search";
 import { basename, dirname, platform, stripExtension } from "../backend";
 import { useStore, type FontFamily, type LineWidth, type ThemePref } from "./store";
+import { SORT_LABELS, type SortBy } from "./treeSort";
 
 export interface AppCommand {
   id: string;
@@ -114,6 +115,14 @@ export function appCommands(): AppCommand[] {
     run: () => useStore.getState().setFontFamily(f),
   });
 
+  const sort = (by: SortBy): AppCommand => ({
+    id: `sort.${by}`,
+    title: `Sort notes by ${SORT_LABELS[by].toLowerCase()}`,
+    keywords: "order files list date modified recent newest",
+    enabled: hasVault,
+    run: () => useStore.getState().setSortBy(by),
+  });
+
   const commands: AppCommand[] = [
     { id: "note.new", title: "New note", keys: "Mod+N", global: true, enabled: hasVault, run: () => void useStore.getState().createNote() },
     { id: "folder.new", title: "New folder", keys: "Mod+Shift+N", global: true, enabled: hasVault, run: () => void useStore.getState().createFolder() },
@@ -172,6 +181,15 @@ export function appCommands(): AppCommand[] {
     { id: "view.sidebar", title: "Toggle sidebar", keys: "Mod+\\", global: true, run: () => useStore.getState().toggleSidebar() },
     { id: "view.outline", title: "Toggle outline", keys: "Mod+Shift+\\", global: true, run: () => useStore.getState().toggleOutline() },
     {
+      id: "view.reading",
+      title: s.readingMode ? "Turn off reading mode" : "Turn on reading mode",
+      keywords: "read only preview review hide markdown syntax",
+      keys: "Mod+Shift+E",
+      global: true,
+      enabled: hasNote,
+      run: () => useStore.getState().setReadingMode(!useStore.getState().readingMode),
+    },
+    {
       id: "view.focus",
       title: s.focusMode ? "Turn off focus mode" : "Turn on focus mode",
       keywords: "dim distraction free zen",
@@ -199,12 +217,21 @@ export function appCommands(): AppCommand[] {
       keywords: "cursor animation glide",
       run: () => useStore.getState().setSmoothCaret(!useStore.getState().smoothCaret),
     },
+    {
+      id: "editor.smartTypography",
+      title: s.smartTypography ? "Turn off smart quotes and dashes" : "Turn on smart quotes and dashes",
+      keywords: "typography curly quotes em dash ellipsis punctuation autocorrect",
+      run: () => useStore.getState().setSmartTypography(!useStore.getState().smartTypography),
+    },
     { id: "text.bigger", title: "Increase text size", keywords: "zoom in font larger", keys: "Mod+=", global: true, run: () => useStore.getState().bumpFontSize(1) },
     { id: "text.smaller", title: "Decrease text size", keywords: "zoom out font smaller", keys: "Mod+-", global: true, run: () => useStore.getState().bumpFontSize(-1) },
     { id: "text.reset", title: "Reset text size", keywords: "zoom actual size font", run: () => useStore.getState().setFontSize(16) },
     width("narrow", "Narrow"),
     width("medium", "Medium"),
     width("wide", "Wide"),
+    sort("name"),
+    sort("modified"),
+    sort("created"),
     font("sans", "Sans serif"),
     font("serif", "Serif"),
     font("mono", "Monospace"),

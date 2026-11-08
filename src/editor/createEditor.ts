@@ -14,6 +14,8 @@ import { slashMenu } from "./slashMenu";
 import { bubbleToolbar } from "./bubbleToolbar";
 import { typewriter } from "./typewriter";
 import { wrapSelectionOnType } from "./wrapSelection";
+import { smartTypography } from "./smartTypography";
+import { readingMode } from "./readingMode";
 import { jumpFlash } from "./flash";
 import { marginFit } from "./marginFit";
 import { scrollerClicks } from "./scrollerClicks";
@@ -27,6 +29,10 @@ export interface EditorCallbacks {
   onNavigate?: (direction: -1 | 1) => boolean;
   /** Read on every update; true keeps the caret centered. */
   typewriter?: () => boolean;
+  /** Read as you type; true turns quotes, `--` and `...` into curly quotes, dashes and ellipses. */
+  smartTypography?: () => boolean;
+  /** Read when the editor state is created; change it later with setReadingMode. */
+  readingMode?: () => boolean;
   /** Saves pasted, dropped or picked images; without it, images can't be added. */
   onImages?: ImageSaver;
 }
@@ -40,6 +46,7 @@ export interface CreateEditorOptions extends EditorCallbacks {
 
 function editorExtensions(opts: Omit<CreateEditorOptions, "parent" | "doc">): Extension[] {
   return [
+    readingMode(opts.readingMode?.() ?? false),
     history(),
     drawSelection(),
     dropCursor(),
@@ -52,6 +59,8 @@ function editorExtensions(opts: Omit<CreateEditorOptions, "parent" | "doc">): Ex
     // apostrophes and with typing ``` for a code fence.
     markdownLanguage.data.of({ closeBrackets: { brackets: ["(", "[", "{"] } }),
     closeBrackets(),
+    // Before wrapSelectionOnType, so a quote typed over a selection wraps it in curly quotes.
+    smartTypography(opts.smartTypography ?? (() => false)),
     wrapSelectionOnType,
     typewriter(opts.typewriter ?? (() => false)),
     codeHighlighting,

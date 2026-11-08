@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { prefersReducedMotion } from "./usePresence";
+import { Check } from "./icons";
 
 export type MenuItem =
   | {
@@ -8,6 +9,8 @@ export type MenuItem =
       danger?: boolean;
       /** Shortcut shown on the right, already formatted. */
       hint?: string;
+      /** For a choice between options: whether this one is chosen (shows a tick). */
+      checked?: boolean;
     }
   | { separator: true };
 
@@ -91,12 +94,14 @@ export function ContextMenu({ x, y, items, onClose }: { x: number; y: number; it
         ) : (
           <button
             key={item.label}
-            role="menuitem"
+            role={item.checked === undefined ? "menuitem" : "menuitemradio"}
+            aria-checked={item.checked}
             className={item.danger ? "menu-item danger" : "menu-item"}
             onClick={() => close(item.onSelect)}
             onMouseMove={(e) => e.currentTarget.focus({ preventScroll: true })}
           >
-            <span>{item.label}</span>
+            {item.checked !== undefined && <span className="menu-check">{item.checked && <Check />}</span>}
+            <span className="menu-label">{item.label}</span>
             {item.hint && <span className="menu-hint">{item.hint}</span>}
           </button>
         ),

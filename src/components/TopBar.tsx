@@ -1,6 +1,6 @@
 import { canGoBack, canGoForward, crumbsFor, outlineVisible, sidebarVisible, useStore } from "../state/store";
 import { formatShortcut } from "../state/appCommands";
-import { ArrowsHorizontal, ArrowsInward, ChevronLeft, ChevronRightLg, FileText, PanelLeft, PanelRight } from "./icons";
+import { ArrowsHorizontal, ArrowsInward, BookOpen, ChevronLeft, ChevronRightLg, FileText, PanelLeft, PanelRight } from "./icons";
 
 export function TopBar() {
   const vaultRoot = useStore((s) => s.vaultRoot);
@@ -9,6 +9,8 @@ export function TopBar() {
   const outlineOpen = useStore(outlineVisible);
   const fullWidth = useStore((s) => s.fullWidth);
   const setFullWidth = useStore((s) => s.setFullWidth);
+  const readingMode = useStore((s) => s.readingMode);
+  const setReadingMode = useStore((s) => s.setReadingMode);
   const back = useStore(canGoBack);
   const forward = useStore(canGoForward);
   const toggleSidebar = useStore((s) => s.toggleSidebar);
@@ -57,6 +59,18 @@ export function TopBar() {
         )}
       </nav>
       <div className="topbar-actions">
+        {activePath && (
+          <button
+            className={`icon-button reading-toggle${readingMode ? " on" : ""}`}
+            onClick={() => setReadingMode(!readingMode)}
+            aria-label="Reading mode"
+            aria-pressed={readingMode}
+            title={`${readingMode ? "Back to editing" : "Reading mode"} (${formatShortcut("Mod+Shift+E")})`}
+          >
+            <BookOpen />
+            {readingMode && <span className="reading-label">Reading</span>}
+          </button>
+        )}
         <button
           className={`icon-button${fullWidth ? " on" : ""}`}
           onClick={() => setFullWidth(!fullWidth)}

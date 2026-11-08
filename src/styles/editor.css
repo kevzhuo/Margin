@@ -1103,3 +1103,8 @@ html.smooth-caret .editor-host .cm-editor .cm-cursor {
   font-variant-ligatures: common-ligatures contextual;
   font-optical-sizing: auto;
 }
+
+/* Reading mode: nothing to type into, so no placeholder. */
+html.reading-mode .editor-host .cm-editor .cm-placeholder {
+  display: none;
+}

@@ -94,6 +94,9 @@ test("dropping the same name twice keeps both images", async ({ page }) => {
 
 test("/image opens the file picker and adds the chosen images", async ({ page }) => {
   await openNote(page, "# Photos\n\n");
+  // Listen for the picker well before it opens: Playwright starts catching
+  // file choosers asynchronously, and one that opens first is missed.
+  const chooser = page.waitForEvent("filechooser");
   await placeCaret(page, "# Photos", 8);
   await page.keyboard.press("Enter");
   await page.keyboard.type("/image");
@@ -102,7 +105,6 @@ test("/image opens the file picker and adds the chosen images", async ({ page })
   const menu = page.locator(".cm-tooltip-autocomplete");
   await expect(menu.locator("li[aria-selected] .cm-completionMatchedText")).toHaveText("Image");
   await page.waitForTimeout(150);
-  const chooser = page.waitForEvent("filechooser");
   await page.keyboard.press("Enter");
   await (await chooser).setFiles([
     { name: "one.png", mimeType: "image/png", buffer: PIXEL },

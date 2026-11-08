@@ -46,6 +46,15 @@ function useTheme() {
     };
     apply();
     first.current = false;
+    // The window follows the chosen theme too, not just the page: on macOS the
+    // sidebar's frosted material and the traffic lights take the window's
+    // appearance, so a dark theme on a light system would otherwise get a pale
+    // sidebar behind light text. "system" hands it back to the OS.
+    if (isTauri()) {
+      void import("@tauri-apps/api/window")
+        .then(({ getCurrentWindow }) => getCurrentWindow().setTheme(theme === "system" ? null : theme))
+        .catch(() => {});
+    }
     mq.addEventListener("change", apply);
     return () => {
       mq.removeEventListener("change", apply);
@@ -64,6 +73,7 @@ function useAppearance() {
   const typewriter = useStore((s) => s.typewriter);
   const fullWidth = useStore((s) => s.fullWidth);
   const smoothCaret = useStore((s) => s.smoothCaret);
+  const readingMode = useStore((s) => s.readingMode);
   useEffect(() => {
     const root = document.documentElement;
     root.style.setProperty("--editor-font-size", `${fontSize}px`);
@@ -74,8 +84,9 @@ function useAppearance() {
     root.classList.toggle("typewriter", typewriter);
     root.classList.toggle("full-width", fullWidth);
     root.classList.toggle("smooth-caret", smoothCaret);
+    root.classList.toggle("reading-mode", readingMode);
     root.dataset.font = fontFamily;
-  }, [fontSize, fontFamily, lineWidth, sidebarWidth, focusMode, typewriter, fullWidth, smoothCaret]);
+  }, [fontSize, fontFamily, lineWidth, sidebarWidth, focusMode, typewriter, fullWidth, smoothCaret, readingMode]);
 }
 
 /**

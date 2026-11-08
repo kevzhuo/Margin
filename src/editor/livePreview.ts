@@ -56,7 +56,10 @@ export const focusedField = StateField.define<boolean>({
   },
 });
 
-const focusTracker = EditorView.focusChangeEffect.of((_state, focusing) => setFocused.of(focusing));
+/** Whether the note is being edited: it has focus and can be edited (not in reading mode). */
+const editing = (view: EditorView) => view.hasFocus && view.state.facet(EditorView.editable);
+
+const focusTracker = EditorView.focusChangeEffect.of((state, focusing) => setFocused.of(focusing && state.facet(EditorView.editable)));
 
 /**
  * CodeMirror reports focus changes on a short timer, and a "focus lost" effect
@@ -71,7 +74,7 @@ const focusReconciler = ViewPlugin.fromClass(
     private dead = false;
     constructor(readonly view: EditorView) {}
     update(update: ViewUpdate) {
-      if (update.state.field(focusedField, false) !== update.view.hasFocus) this.schedule();
+      if (update.state.field(focusedField, false) !== editing(update.view)) this.schedule();
     }
     schedule() {
       if (this.timer) return;
@@ -79,8 +82,8 @@ const focusReconciler = ViewPlugin.fromClass(
         this.timer = null;
         if (this.dead) return;
         const field = this.view.state.field(focusedField, false);
-        if (field !== undefined && field !== this.view.hasFocus) {
-          this.view.dispatch({ effects: setFocused.of(this.view.hasFocus) });
+        if (field !== undefined && field !== editing(this.view)) {
+          this.view.dispatch({ effects: setFocused.of(editing(this.view)) });
         }
       }, 20);
     }
@@ -104,7 +107,8 @@ const mathSrc = markDeco("cm-md-math-src");
 const marginMark = markDeco("cm-md-mark cm-md-margin-mark");
 const lineDeco = (cls: string) => Decoration.line({ class: cls });
 
-function frontMatterRange(doc: Text): { from: number; to: number } | null {
+/** YAML front matter: `---` on the first line through the closing `---` or `...`. */
+export function frontMatterRange(doc: Text): { from: number; to: number } | null {
   if (doc.lines < 2) return null;
   const first = doc.line(1);
   if (first.text.trim() !== "---") return null;

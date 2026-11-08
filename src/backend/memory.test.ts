@@ -39,6 +39,18 @@ describe("listTree", () => {
   it("returns an empty tree for an unknown root", async () => {
     expect(await backend.listTree("/nowhere")).toEqual([]);
   });
+  it("records when notes are created and edited, and keeps the times through a move", async () => {
+    const time = async (path: string) => flattenFiles(await backend.listTree(R)).find((f) => f.path === path)!;
+    const before = await time(`${R}/a.md`);
+    expect(before.modified).toBeTypeOf("number");
+    expect(before.created).toBeTypeOf("number");
+    await backend.writeNote(`${R}/a.md`, "# a, edited");
+    const edited = await time(`${R}/a.md`);
+    expect(edited.modified).toBeGreaterThan(before.modified!);
+    expect(edited.created).toBe(before.created);
+    await backend.renamePath(`${R}/a.md`, `${R}/Alpha/a.md`);
+    expect((await time(`${R}/Alpha/a.md`)).modified).toBe(edited.modified);
+  });
 });
 
 describe("notes", () => {

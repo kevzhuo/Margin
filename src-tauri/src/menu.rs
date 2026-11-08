@@ -42,6 +42,7 @@ pub const VIEW: &[Item] = &[
         "Toggle Outline",
         Some("Shift+CmdOrCtrl+Backslash"),
     ),
+    ("view.reading", "Reading Mode", Some("Shift+CmdOrCtrl+E")),
     ("view.fullWidth", "Toggle Full Width", None),
     ("view.focus", "Focus Mode", Some("F8")),
     ("view.typewriter", "Typewriter Mode", Some("F9")),

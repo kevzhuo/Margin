@@ -69,6 +69,7 @@
   color-scheme: dark;
   --bg: #191919;
   --bg-sidebar: #202020;
+  --sidebar-wash: rgba(32, 32, 32, 0.82);
   --bg-hover: rgba(255, 255, 255, 0.055);
   --bg-selected: rgba(255, 255, 255, 0.08);
   --bg-elevated: #252525;
