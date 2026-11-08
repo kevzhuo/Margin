@@ -25,6 +25,15 @@ const FORMAT: Record<string, (view: EditorView) => boolean> = {
 const EXTRA: Record<string, () => void> = {
   // The command list shows every shortcut beside its command.
   "help.shortcuts": () => useStore.getState().openPalette(">"),
+  // Save what was just typed, then quit (the app quits on its own after a moment if this fails).
+  "app.quit": () =>
+    void useStore
+      .getState()
+      .flushSave()
+      .finally(async () => {
+        const { invoke } = await import("@tauri-apps/api/core");
+        await invoke("quit_app");
+      }),
 };
 
 export function hasMenuHandler(id: string): boolean {

@@ -125,6 +125,10 @@ const defaultSettings: Settings = {
   viewStates: {},
 };
 
+/** Settings the store keeps under the same name. `lastNote` is the store's `activePath`, and `vaultRoot` starts empty until the vault opens. */
+type StoredSetting = Exclude<keyof Settings, "vaultRoot" | "lastNote">;
+const STORED_SETTINGS = (Object.keys(defaultSettings) as (keyof Settings)[]).filter((k): k is StoredSetting => k !== "vaultRoot" && k !== "lastNote");
+
 function loadSettings(): Settings {
   try {
     const raw = globalThis.localStorage?.getItem(SETTINGS_KEY);
@@ -145,6 +149,17 @@ function saveSettings(s: Settings) {
 
 const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
 
+/** The saved settings the store starts with, with anything out of range corrected. */
+function initialSettings(saved: Settings): Pick<Settings, StoredSetting> {
+  const picked = Object.fromEntries(STORED_SETTINGS.map((k) => [k, saved[k]])) as Pick<Settings, StoredSetting>;
+  return {
+    ...picked,
+    sidebarWidth: clamp(saved.sidebarWidth, SIDEBAR_WIDTH_MIN, SIDEBAR_WIDTH_MAX),
+    fontSize: clamp(saved.fontSize, FONT_SIZE_MIN, FONT_SIZE_MAX),
+    sortBy: SORT_KEYS.includes(saved.sortBy) ? saved.sortBy : "name",
+  };
+}
+
 /** Replace `from` (or anything under it) with the same path under `to`. */
 function remap(path: string, from: string, to: string): string {
   if (path === from) return to;
@@ -164,7 +179,6 @@ export interface AppState {
   contentVersion: number;
   dirty: boolean;
   saveState: SaveState;
-  /** The active note changed on disk while there were unsaved edits. */
   theme: ThemePref;
   sidebarOpen: boolean;
   outlineOpen: boolean;
@@ -218,7 +232,7 @@ export interface AppState {
   /** Ask where to make a new vault, open it, and start its first note. */
   createVault(): Promise<void>;
   forgetVault(root: string): void;
-  closeVault(): void;
+  closeVault(): Promise<void>;
   refreshTree(): Promise<void>;
   openNote(path: string, opts?: { history?: boolean; jump?: Omit<Jump, "path"> }): Promise<void>;
   goBack(): Promise<void>;
@@ -271,7 +285,6 @@ export interface AppState {
   openPalette(seed?: string): void;
   closePalette(): void;
   /** Kept for the existing keyboard shortcut and tests. */
-  setQuickOpen(open: boolean): void;
   setSettingsOpen(open: boolean): void;
   setHeadings(headings: Heading[]): void;
   setCaret(head: number): void;
@@ -300,6 +313,18 @@ let syncedTitle: string | null = null;
 let titleTimer: ReturnType<typeof setTimeout> | null = null;
 let confirmResolver: ((ok: boolean) => void) | null = null;
 
+/**
+ * Saves, renames, moves and deletes run one at a time, in order. Otherwise an
+ * autosave could land during a rename and recreate the old file, or two saves
+ * could finish out of order and leave the older text on disk.
+ */
+let fileOps: Promise<unknown> = Promise.resolve();
+function serially<T>(op: () => Promise<T>): Promise<T> {
+  const run = fileOps.then(op, op);
+  fileOps = run.catch(() => {});
+  return run;
+}
+
 export const SAVE_DELAY_MS = 500;
 /** How many vaults the welcome screen remembers. */
 export const RECENT_VAULTS_MAX = 6;
@@ -313,28 +338,8 @@ export const useStore = create<AppState>((set, get) => {
 
   const persist = () => {
     const s = get();
-    saveSettings({
-      theme: s.theme,
-      vaultRoot: s.vaultRoot,
-      lastNote: s.activePath,
-      sidebarOpen: s.sidebarOpen,
-      outlineOpen: s.outlineOpen,
-      expandedDirs: s.expandedDirs,
-      sidebarWidth: s.sidebarWidth,
-      fontSize: s.fontSize,
-      lineWidth: s.lineWidth,
-      fontFamily: s.fontFamily,
-      fullWidth: s.fullWidth,
-      smoothCaret: s.smoothCaret,
-      smartTypography: s.smartTypography,
-      sortBy: s.sortBy,
-      titleSync: s.titleSync,
-      focusMode: s.focusMode,
-      typewriter: s.typewriter,
-      recent: s.recent,
-      recentVaults: s.recentVaults,
-      viewStates: s.viewStates,
-    });
+    const stored = Object.fromEntries(STORED_SETTINGS.map((k) => [k, s[k]])) as Pick<Settings, StoredSetting>;
+    saveSettings({ ...stored, vaultRoot: s.vaultRoot, lastNote: s.activePath });
   };
 
   const fail = (message: string, e: unknown) => {
@@ -352,15 +357,10 @@ export const useStore = create<AppState>((set, get) => {
   const onWatchEvent = (event: WatchEvent) => {
     const { activePath } = get();
     if (event.kind !== "modify") scheduleTreeRefresh();
-    if (activePath && event.paths.includes(activePath)) {
-      // A rename (Margin's own, when a title changes, or one made in Finder)
-      // moves the file, not its text: the tree refresh is all it needs.
-      if (event.kind === "remove" || event.kind === "rename") {
-        scheduleTreeRefresh();
-        return;
-      }
-      void get().syncFromDisk();
-    }
+    // Any kind of event can mean new text: editors that save by swapping in a
+    // new file report a rename or a create. syncFromDisk ignores Margin's own
+    // writes and a note that has moved away.
+    if (activePath && event.paths.includes(activePath)) void get().syncFromDisk();
   };
 
   /** A file or folder moved: rewrite every remembered path that pointed into it. */
@@ -459,7 +459,7 @@ export const useStore = create<AppState>((set, get) => {
       const content = await backend.readNote(path);
       const title = titleFromDoc(content);
       if (title === null || fileNameFromTitle(title) !== oldStem) return;
-      await backend.writeNote(path, apply(content, replaceTitle(content, newStem)!));
+      await serially(() => backend.writeNote(path, apply(content, replaceTitle(content, newStem)!)));
     } catch (e) {
       fail("Could not update the note's title", e);
     }
@@ -489,20 +489,7 @@ export const useStore = create<AppState>((set, get) => {
     contentVersion: 0,
     dirty: false,
     saveState: "idle",
-    theme: settings.theme,
-    sidebarOpen: settings.sidebarOpen,
-    outlineOpen: settings.outlineOpen,
-    sidebarWidth: clamp(settings.sidebarWidth, SIDEBAR_WIDTH_MIN, SIDEBAR_WIDTH_MAX),
-    fontSize: clamp(settings.fontSize, FONT_SIZE_MIN, FONT_SIZE_MAX),
-    lineWidth: settings.lineWidth,
-    fontFamily: settings.fontFamily,
-    fullWidth: settings.fullWidth,
-    smoothCaret: settings.smoothCaret,
-    smartTypography: settings.smartTypography,
-    sortBy: SORT_KEYS.includes(settings.sortBy) ? settings.sortBy : "name",
-    titleSync: settings.titleSync,
-    focusMode: settings.focusMode,
-    typewriter: settings.typewriter,
+    ...initialSettings(settings),
     readingMode: false,
     sidebarFits: true,
     outlineFits: true,
@@ -516,16 +503,12 @@ export const useStore = create<AppState>((set, get) => {
     currentHeading: null,
     wordCount: 0,
     selectionWords: 0,
-    expandedDirs: settings.expandedDirs,
     toasts: [],
     confirmRequest: null,
     editor: null,
     renaming: null,
     history: [],
     historyIndex: -1,
-    recent: settings.recent,
-    recentVaults: settings.recentVaults,
-    viewStates: settings.viewStates,
     jump: null,
     jumpVersion: 0,
 
@@ -624,7 +607,10 @@ export const useStore = create<AppState>((set, get) => {
       persist();
     },
 
-    closeVault() {
+    async closeVault() {
+      if (titleTimer) await get().syncTitle();
+      await get().flushSave();
+      latestDoc = savedDoc = null;
       unwatch?.();
       unwatch = null;
       set({ vaultRoot: null, tree: [], activePath: null, content: null, dirty: false, headings: [], wordCount: 0, history: [], historyIndex: -1 });
@@ -689,29 +675,32 @@ export const useStore = create<AppState>((set, get) => {
       }, SAVE_DELAY_MS);
     },
 
-    async flushSave() {
+    flushSave() {
       if (saveTimer) {
         clearTimeout(saveTimer);
         saveTimer = null;
       }
-      const { backend, activePath } = get();
-      if (!backend || !activePath || latestDoc === null || latestDoc === savedDoc) return;
-      const doc = latestDoc;
-      set({ saveState: "saving" });
-      try {
-        await backend.writeNote(activePath, doc);
-        savedDoc = doc;
-        // The watcher skips Margin's own writes, so keep "Last edited" order current here.
-        set((s) => ({
-          saveState: "saved",
-          dirty: latestDoc !== savedDoc,
-          content: doc,
-          tree: s.sortBy === "modified" ? touchFile(s.tree, activePath, Date.now()) : s.tree,
-        }));
-      } catch (e) {
-        set({ saveState: "error" });
-        fail(`Could not save ${stripExtension(basename(activePath))}`, e);
-      }
+      // Which note and what text are read when the save's turn comes, after any rename before it.
+      return serially(async () => {
+        const { backend, activePath } = get();
+        if (!backend || !activePath || latestDoc === null || latestDoc === savedDoc) return;
+        const doc = latestDoc;
+        set({ saveState: "saving" });
+        try {
+          await backend.writeNote(activePath, doc);
+          savedDoc = doc;
+          // The watcher skips Margin's own writes, so keep "Last edited" order current here.
+          set((s) => ({
+            saveState: "saved",
+            dirty: latestDoc !== savedDoc,
+            content: doc,
+            tree: s.sortBy === "modified" ? touchFile(s.tree, activePath, Date.now()) : s.tree,
+          }));
+        } catch (e) {
+          set({ saveState: "error" });
+          fail(`Could not save ${stripExtension(basename(activePath))}`, e);
+        }
+      });
     },
 
     async createNote(dir, name) {
@@ -795,8 +784,10 @@ export const useStore = create<AppState>((set, get) => {
       }
       try {
         if (activePath && isWithin(activePath, path)) await get().flushSave();
-        await backend.renamePath(path, to);
-        remapPaths(path, to);
+        await serially(async () => {
+          await backend.renamePath(path, to);
+          remapPaths(path, to);
+        });
         await get().refreshTree();
         set({ renaming: null });
         if (isFile && get().titleSync && opts.updateHeading !== false) {
@@ -847,8 +838,10 @@ export const useStore = create<AppState>((set, get) => {
       }
       try {
         if (activePath && isWithin(activePath, from)) await get().flushSave();
-        await backend.renamePath(from, to);
-        remapPaths(from, to);
+        await serially(async () => {
+          await backend.renamePath(from, to);
+          remapPaths(from, to);
+        });
         set((s) => ({ expandedDirs: { ...s.expandedDirs, [toDir]: true } }));
         await get().refreshTree();
         persist();
@@ -869,7 +862,7 @@ export const useStore = create<AppState>((set, get) => {
           saveTimer = null;
           set({ activePath: null, content: null, dirty: false, headings: [], wordCount: 0, selectionWords: 0 });
         }
-        await backend.deletePath(path);
+        await serially(() => backend.deletePath(path));
         forgetPaths(path);
         await get().refreshTree();
         const name = stripExtension(basename(path));
@@ -1046,11 +1039,6 @@ export const useStore = create<AppState>((set, get) => {
       set({ paletteOpen: false });
     },
 
-    setQuickOpen(open) {
-      if (open) get().openPalette("");
-      else get().closePalette();
-    },
-
     setSettingsOpen(open) {
       set({ settingsOpen: open });
     },
@@ -1137,7 +1125,7 @@ export function noteTitle(path: string | null): string {
 /** Path of a note relative to the vault root, split into crumbs. */
 export function crumbsFor(vaultRoot: string | null, path: string | null): string[] {
   if (!vaultRoot || !path) return [];
-  const rel = path.startsWith(vaultRoot) ? path.slice(vaultRoot.length) : path;
+  const rel = isWithin(path, vaultRoot) ? path.slice(vaultRoot.length) : path;
   return rel.split(/[\\/]/).filter(Boolean).map((p, i, arr) => (i === arr.length - 1 ? stripExtension(p) : p));
 }
 

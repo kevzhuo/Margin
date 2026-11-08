@@ -353,11 +353,18 @@ pub fn write_atomic(path: &Path, content: &str) -> Result<(), String> {
         .map(|d| d.as_nanos())
         .unwrap_or(0);
     let tmp = dir.join(format!(".{stem}.{}.{nonce}.tmp", std::process::id()));
+    let existing = fs::metadata(path).ok();
     {
         let mut file =
             fs::File::create(&tmp).map_err(|e| io_err("Could not create temp file", e))?;
         file.write_all(content.as_bytes())
             .map_err(|e| io_err("Could not write note", e))?;
+        // The temp file replaces the note, so it takes on the note's permissions
+        // and creation date; otherwise every save would make the note look new.
+        if let Some(meta) = &existing {
+            let _ = file.set_permissions(meta.permissions());
+            keep_created(&file, meta);
+        }
         file.sync_all()
             .map_err(|e| io_err("Could not flush note", e))?;
     }
@@ -367,6 +374,22 @@ pub fn write_atomic(path: &Path, content: &str) -> Result<(), String> {
     }
     Ok(())
 }
+
+/// Give `file` the creation date in `meta`, where the platform allows setting it.
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+fn keep_created(file: &fs::File, meta: &fs::Metadata) {
+    #[cfg(target_os = "macos")]
+    use std::os::macos::fs::FileTimesExt;
+    #[cfg(target_os = "windows")]
+    use std::os::windows::fs::FileTimesExt;
+    if let Ok(created) = meta.created() {
+        let _ = file.set_times(fs::FileTimes::new().set_created(created));
+    }
+}
+
+/// Linux can't set a creation date; the note's modified time is what it sorts by there.
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+fn keep_created(_file: &fs::File, _meta: &fs::Metadata) {}
 
 /// Create `<dir>/<name>.md`, de-duplicating as `<name> 2.md`, `<name> 3.md`, ...
 pub fn create_note_in(dir: &Path, name: &str) -> Result<PathBuf, String> {
@@ -598,6 +621,10 @@ pub fn search_dir(root: &Path, query: &str, limit: usize) -> Result<Vec<SearchHi
     Ok(hits)
 }
 
+fn same_file(a: &Path, b: &Path) -> bool {
+    matches!((a.canonicalize(), b.canonicalize()), (Ok(a), Ok(b)) if a == b)
+}
+
 /// Rename or move; refuses to overwrite an existing destination.
 pub fn rename_checked(from: &Path, to: &Path) -> Result<(), String> {
     if !from.exists() {
@@ -606,7 +633,9 @@ pub fn rename_checked(from: &Path, to: &Path) -> Result<(), String> {
     if to != from && to.starts_with(from) {
         return Err("Cannot move a folder into itself".to_string());
     }
-    if to.exists() {
+    // On a case-insensitive disk (the macOS default), "note.md" and "Note.md"
+    // are the same file, so a change of case is a rename, not a clash.
+    if to.exists() && !same_file(from, to) {
         return Err(format!("Already exists: {}", to.display()));
     }
     if let Some(parent) = to.parent() {
@@ -1046,6 +1075,45 @@ mod tests {
             "temp files left behind: {leftovers:?}"
         );
         assert!(write_atomic(&tmp.path().join("missing/note.md"), "x").is_err());
+    }
+
+    #[test]
+    fn write_atomic_keeps_the_notes_permissions_and_creation_date() {
+        let tmp = tempdir().unwrap();
+        let path = tmp.path().join("note.md");
+        write_atomic(&path, "first").unwrap();
+        let before = fs::metadata(&path).unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).unwrap();
+        }
+        std::thread::sleep(Duration::from_millis(20));
+        write_atomic(&path, "second").unwrap();
+        let after = fs::metadata(&path).unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            assert_eq!(after.permissions().mode() & 0o777, 0o600);
+        }
+        // Linux can't set a creation date, so this holds on macOS and Windows.
+        if cfg!(any(target_os = "macos", target_os = "windows")) {
+            assert_eq!(after.created().unwrap(), before.created().unwrap());
+        }
+    }
+
+    #[test]
+    fn rename_allows_changing_only_the_case() {
+        let tmp = tempdir().unwrap();
+        let a = tmp.path().join("meeting.md");
+        fs::write(&a, "x").unwrap();
+        let b = tmp.path().join("Meeting.md");
+        rename_checked(&a, &b).unwrap();
+        let names: Vec<_> = fs::read_dir(tmp.path())
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(names, vec!["Meeting.md"]);
     }
 
     #[test]

@@ -93,6 +93,13 @@ pub const BLOCKS: &[Item] = &[
 
 pub const APP: &[Item] = &[("settings.open", "Settings…", Some("CmdOrCtrl+Comma"))];
 
+/// Quit is Margin's own item, not the native one, so the note being typed is
+/// saved first (the frontend saves, then calls `quit_app`).
+pub const QUIT: &[Item] = &[("app.quit", "Quit Margin", Some("CmdOrCtrl+Q"))];
+
+/// If the page never answers (it crashed, or is still loading), quit anyway after this long.
+const QUIT_FALLBACK: std::time::Duration = std::time::Duration::from_secs(2);
+
 pub const HELP: &[Item] = &[(
     "help.shortcuts",
     "Keyboard Shortcuts",
@@ -101,7 +108,7 @@ pub const HELP: &[Item] = &[(
 
 /// Every custom item, for tests and for the frontend contract.
 pub fn all_items() -> impl Iterator<Item = &'static Item> {
-    [APP, FILE, FIND, VIEW, ZOOM, THEME, GO, FORMAT, BLOCKS, HELP]
+    [APP, QUIT, FILE, FIND, VIEW, ZOOM, THEME, GO, FORMAT, BLOCKS, HELP]
         .into_iter()
         .flatten()
 }
@@ -139,9 +146,8 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
         .hide()
         .hide_others()
         .show_all()
-        .separator()
-        .quit()
-        .build()?;
+        .separator();
+    let app_menu = add(app_menu, app, QUIT)?.build()?;
 
     let file = add(SubmenuBuilder::new(app, "File"), app, FILE)?
         .separator()
@@ -198,6 +204,19 @@ pub fn forward_to_frontend<R: Runtime>(app: &AppHandle<R>, event: MenuEvent) {
     if all_items().any(|(item, _, _)| *item == id) {
         let _ = app.emit(MENU_EVENT, id.to_string());
     }
+    if id == QUIT[0].0 {
+        let app = app.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(QUIT_FALLBACK);
+            app.exit(0);
+        });
+    }
+}
+
+/// Called by the frontend once the open note is saved.
+#[tauri::command]
+pub fn quit_app<R: Runtime>(app: AppHandle<R>) {
+    app.exit(0);
 }
 
 #[cfg(test)]

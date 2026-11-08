@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { findMatch, flattenFiles, stripExtension, type SearchHit } from "../backend";
+import { findMatch, flattenFiles, isWithin, stripExtension, type SearchHit } from "../backend";
 import { useStore } from "../state/store";
 import { formatShortcut, paletteCommands, type AppCommand } from "../state/appCommands";
 import { usePresence } from "./usePresence";
@@ -111,7 +111,7 @@ export function Palette() {
     return () => clearTimeout(t);
   }, [open, commandMode, q, backend, vaultRoot]);
 
-  const relOf = (path: string) => (vaultRoot && path.startsWith(vaultRoot) ? path.slice(vaultRoot.length).replace(/^[\\/]/, "") : path);
+  const relOf = (path: string) => (vaultRoot && isWithin(path, vaultRoot) ? path.slice(vaultRoot.length).replace(/^[\\/]/, "") : path);
 
   const items = useMemo<Item[]>(() => {
     if (commandMode) {

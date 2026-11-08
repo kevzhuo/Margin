@@ -61,6 +61,7 @@ pub fn run() {
             vault::unwatch_vault,
             vault::save_attachment,
             vault::create_vault,
+            menu::quit_app,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Margin");

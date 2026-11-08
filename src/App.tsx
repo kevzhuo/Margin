@@ -129,7 +129,6 @@ function useResponsivePanels() {
 
 function useWindowTitle() {
   const activePath = useStore((s) => s.activePath);
-  const dirty = useStore((s) => s.dirty);
   useEffect(() => {
     const title = activePath ? `${noteTitle(activePath)} — Margin` : "Margin";
     document.title = title;
@@ -139,10 +138,6 @@ function useWindowTitle() {
         .catch(() => {});
     }
   }, [activePath]);
-  // macOS shows unsaved changes as a dot in the close button.
-  useEffect(() => {
-    document.documentElement.classList.toggle("unsaved", dirty);
-  }, [dirty]);
 }
 
 function useShortcuts() {
@@ -241,12 +236,24 @@ export default function App() {
     );
   }, [ready]);
 
+  // Save what was just typed before the page or the window goes away. Closing
+  // the desktop window waits for the save (Quit does the same, see menuBridge).
   useEffect(() => {
     const flush = () => void useStore.getState().flushSave();
     const onHide = () => document.visibilityState === "hidden" && flush();
     window.addEventListener("beforeunload", flush);
     document.addEventListener("visibilitychange", onHide);
+    let stopClose: (() => void) | null = null;
+    let disposed = false;
+    if (isTauri()) {
+      void import("@tauri-apps/api/window")
+        .then(({ getCurrentWindow }) => getCurrentWindow().onCloseRequested(() => useStore.getState().flushSave()))
+        .then((stop) => (disposed ? stop() : (stopClose = stop)))
+        .catch(() => {});
+    }
     return () => {
+      disposed = true;
+      stopClose?.();
       window.removeEventListener("beforeunload", flush);
       document.removeEventListener("visibilitychange", onHide);
     };

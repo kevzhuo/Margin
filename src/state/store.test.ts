@@ -120,6 +120,38 @@ describe("autosave", () => {
   });
 });
 
+describe("file operations run in order", () => {
+  it("an autosave during a slow rename goes to the renamed file and doesn't bring the old one back", async () => {
+    const store = await fresh();
+    let finishRename!: () => void;
+    const renamePath = backend.renamePath.bind(backend);
+    backend.renamePath = async (from, to) => {
+      await new Promise<void>((resolve) => (finishRename = resolve));
+      await renamePath(from, to);
+    };
+    const renaming = store.getState().renamePath(DESIGN, "Design");
+    await vi.advanceTimersByTimeAsync(0);
+    // Typing while the rename is still on its way: the autosave has to wait for it.
+    store.getState().updateContent("# Editor design notes\n\nNew text");
+    const saving = store.getState().flushSave();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(backend.writes).toEqual([]);
+    finishRename();
+    await Promise.all([renaming, saving]);
+    expect(store.getState().activePath).toBe(`${R}/Projects/Design.md`);
+    expect(await backend.readNote(`${R}/Projects/Design.md`)).toBe("# Editor design notes\n\nNew text");
+    await expect(backend.readNote(DESIGN)).rejects.toThrow();
+  });
+
+  it("closing the vault saves what was typed", async () => {
+    const store = await fresh();
+    store.getState().updateContent("typed just before closing");
+    await store.getState().closeVault();
+    expect(await backend.readNote(DESIGN)).toBe("typed just before closing");
+    expect(store.getState().vaultRoot).toBeNull();
+  });
+});
+
 describe("external changes", () => {
   it("reloads a note with nothing unsaved when another program changes it", async () => {
     const store = await fresh();
@@ -173,6 +205,14 @@ describe("external changes", () => {
     expect(store.getState().contentVersion).toBe(before);
     expect(store.getState().dirty).toBe(true);
     expect(store.getState().toasts).toEqual([]);
+  });
+
+  it("reloads a note another editor saved by swapping in a new file (reported as a rename)", async () => {
+    const store = await fresh();
+    await backend.writeNote(DESIGN, "# saved by another editor");
+    backend.fire({ kind: "rename", paths: [DESIGN] });
+    await vi.advanceTimersByTimeAsync(10);
+    expect(store.getState().content).toBe("# saved by another editor");
   });
 
   it("ignores a modify event for a note that matches what we saved", async () => {
@@ -428,6 +468,25 @@ describe("appearance settings", () => {
     s().setFocusMode(true);
     const saved = JSON.parse(localStorage.getItem("margin.settings.v1")!);
     expect(saved).toMatchObject({ fontSize: mod.FONT_SIZE_MIN, sidebarWidth: mod.SIDEBAR_WIDTH_MIN, lineWidth: "wide", fontFamily: "serif", focusMode: true });
+  });
+
+  it("starts from saved settings, correcting values out of range and ignoring unknown ones", async () => {
+    vi.resetModules();
+    localStorage.clear();
+    localStorage.setItem(
+      "margin.settings.v1",
+      JSON.stringify({ fontSize: 99, sidebarWidth: 5, sortBy: "size", smartTypography: false, typewriter: true, retired: "old setting" }),
+    );
+    backend = new FakeBackend();
+    window.__MARGIN_BACKEND__ = backend;
+    mod = await import("./store");
+    const s = mod.useStore.getState();
+    expect(s).toMatchObject({ fontSize: mod.FONT_SIZE_MAX, sidebarWidth: mod.SIDEBAR_WIDTH_MIN, sortBy: "name", smartTypography: false, typewriter: true, titleSync: true });
+    expect("retired" in s).toBe(false);
+    s.setTheme("dark");
+    const saved = JSON.parse(localStorage.getItem("margin.settings.v1")!);
+    expect(saved).toMatchObject({ theme: "dark", smartTypography: false, typewriter: true, sortBy: "name" });
+    expect(saved.retired).toBeUndefined();
   });
 
   it("remembers at most 100 view states, dropping the oldest", async () => {

@@ -5,7 +5,7 @@ import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { assetPath, type FileNode, type SearchHit, type VaultBackend, type WatchEvent } from "./types";
 
 /**
- * Rust command contract (see src-tauri/src/vault.rs):
+ * Rust command contract (see src-tauri/src/vault.rs and menu.rs):
  *
  *   list_tree(root: string)                     -> FileNode[]
  *   read_note(path: string)                     -> string
@@ -17,6 +17,9 @@ import { assetPath, type FileNode, type SearchHit, type VaultBackend, type Watch
  *   delete_path(path: string)                   -> void      (moves to trash)
  *   watch_vault(root: string)                   -> void      (emits "vault://changed")
  *   unwatch_vault()                             -> void
+ *   save_attachment(bytes; dir, name headers)   -> string    (saved path, never overwriting)
+ *   create_vault(path: string)                  -> string    (new, empty vault folder)
+ *   quit_app()                                  -> void      (see menuBridge's "app.quit")
  *
  * The "vault://changed" event payload is `{ kind, paths }` (a WatchEvent).
  */
