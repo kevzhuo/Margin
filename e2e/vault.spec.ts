@@ -125,6 +125,17 @@ test("notes can be renamed and deleted from the context menu", async ({ page }) 
   await expect(page.locator(".crumb.current")).toContainText("Editor design notes");
 });
 
+test("right-clicking another row while a menu is open opens that row's menu", async ({ page }) => {
+  await page.locator(".tree-row", { hasText: "Roadmap" }).click({ button: "right" });
+  await expect(page.getByRole("menuitem", { name: "Delete note" })).toBeVisible();
+  // Straight away, while the first menu is still fading out.
+  await page.locator('.tree-row[data-kind="dir"]', { hasText: "Journal" }).click({ button: "right" });
+  await expect(page.getByRole("menuitem", { name: "Delete folder" })).toBeVisible();
+  await page.waitForTimeout(300);
+  await expect(page.getByRole("menu")).toHaveCount(1);
+  await expect(page.getByRole("menuitem", { name: "Delete folder" })).toBeVisible();
+});
+
 test("folders collapse and expand", async ({ page }) => {
   const journal = page.locator('.tree-row[data-kind="dir"]', { hasText: "Journal" });
   await expect(journal).toHaveAttribute("aria-expanded", "true");

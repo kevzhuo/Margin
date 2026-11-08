@@ -6,6 +6,8 @@ import { ChevronRight, Folder } from "./icons";
 import { ContextMenu, type MenuItem } from "./ContextMenu";
 
 interface MenuState {
+  /** Each opening is its own menu, so one still fading out never closes the next. */
+  id: number;
   x: number;
   y: number;
   node: FileNode | null;
@@ -173,11 +175,12 @@ export function FileTree() {
   const [dragging, setDragging] = useState<FileNode | null>(null);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
   const springTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const menuCount = useRef(0);
 
   const onMenu = (e: MouseEvent, node: FileNode | null) => {
     e.preventDefault();
     e.stopPropagation();
-    setMenu({ x: e.clientX, y: e.clientY, node });
+    setMenu({ id: ++menuCount.current, x: e.clientX, y: e.clientY, node });
   };
 
   const items = (node: FileNode | null): MenuItem[] => {
@@ -264,11 +267,21 @@ export function FileTree() {
     if (target) void movePath(from, target);
   };
 
+  const contextMenu = menu && (
+    <ContextMenu
+      key={menu.id}
+      x={menu.x}
+      y={menu.y}
+      items={items(menu.node)}
+      onClose={() => setMenu((open) => (open?.id === menu.id ? null : open))}
+    />
+  );
+
   if (!tree.length) {
     return (
       <div className="tree-empty" onContextMenu={(e) => onMenu(e, null)}>
         No notes yet.
-        {menu && <ContextMenu x={menu.x} y={menu.y} items={items(menu.node)} onClose={() => setMenu(null)} />}
+        {contextMenu}
       </div>
     );
   }
@@ -293,7 +306,7 @@ export function FileTree() {
         <Row key={node.path} node={node} depth={0} onMenu={onMenu} dropTarget={dropTarget} onDragStart={setDragging} />
       ))}
       <div className="tree-spacer" aria-hidden="true" />
-      {menu && <ContextMenu x={menu.x} y={menu.y} items={items(menu.node)} onClose={() => setMenu(null)} />}
+      {contextMenu}
     </div>
   );
 }

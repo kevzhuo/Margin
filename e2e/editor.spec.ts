@@ -67,6 +67,7 @@ test("slash menu inserts a heading", async ({ page }) => {
   await expect(menu.locator("li")).toHaveCount(3);
   await page.keyboard.press("ArrowDown");
   await expect(menu.locator("li[aria-selected]")).toContainText("Heading 2");
+  await page.waitForTimeout(150); // CodeMirror's interactionDelay: Enter right after an update is ignored
   await page.keyboard.press("Enter");
   await expect(menu).toBeHidden();
   await page.keyboard.type("New section");

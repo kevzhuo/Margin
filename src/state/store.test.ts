@@ -161,6 +161,20 @@ describe("external changes", () => {
     expect(await backend.readNote(DESIGN)).toBe("first draft, continued");
   });
 
+  it("a rename reported for the open note, mid-typing, neither reloads it nor shows an error", async () => {
+    const store = await fresh();
+    store.getState().updateContent("# Design\n\nStill typing");
+    const before = store.getState().contentVersion;
+    // The watcher can report a rename (Margin's own title sync, or one made in
+    // Finder) by the old path, which no longer exists.
+    await backend.renamePath(DESIGN, `${R}/Renamed.md`);
+    backend.fire({ kind: "rename", paths: [DESIGN, `${R}/Renamed.md`] });
+    await vi.advanceTimersByTimeAsync(10);
+    expect(store.getState().contentVersion).toBe(before);
+    expect(store.getState().dirty).toBe(true);
+    expect(store.getState().toasts).toEqual([]);
+  });
+
   it("ignores a modify event for a note that matches what we saved", async () => {
     const store = await fresh();
     const before = store.getState().contentVersion;

@@ -335,7 +335,9 @@ export const useStore = create<AppState>((set, get) => {
     const { activePath } = get();
     if (event.kind !== "modify") scheduleTreeRefresh();
     if (activePath && event.paths.includes(activePath)) {
-      if (event.kind === "remove") {
+      // A rename (Margin's own, when a title changes, or one made in Finder)
+      // moves the file, not its text: the tree refresh is all it needs.
+      if (event.kind === "remove" || event.kind === "rename") {
         scheduleTreeRefresh();
         return;
       }
@@ -877,22 +879,24 @@ export const useStore = create<AppState>((set, get) => {
     async syncFromDisk() {
       const { backend, activePath } = get();
       if (!backend || !activePath) return;
+      let content: string;
       try {
-        const content = await backend.readNote(activePath);
-        // Margin's own save, reported back by the watcher (often after more typing).
-        if (content === savedDoc || content === latestDoc) return;
-        // Another program changed it. Unsaved edits win and go over the file.
-        if (get().dirty) {
-          await get().flushSave();
-          return;
-        }
-        latestDoc = content;
-        savedDoc = content;
-        syncedTitle = titleFromDoc(content);
-        set((s) => ({ content, contentVersion: s.contentVersion + 1, dirty: false }));
-      } catch (e) {
-        fail(`Could not reload ${stripExtension(basename(activePath))}`, e);
+        content = await backend.readNote(activePath);
+      } catch {
+        // Gone (moved or deleted elsewhere): the tree refresh shows that.
+        return;
       }
+      // Margin's own save, reported back by the watcher (often after more typing).
+      if (content === savedDoc || content === latestDoc) return;
+      // Another program changed it. Unsaved edits win and go over the file.
+      if (get().dirty) {
+        await get().flushSave();
+        return;
+      }
+      latestDoc = content;
+      savedDoc = content;
+      syncedTitle = titleFromDoc(content);
+      set((s) => ({ content, contentVersion: s.contentVersion + 1, dirty: false }));
     },
 
     setTheme(theme) {
