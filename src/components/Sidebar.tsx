@@ -5,7 +5,7 @@ import { formatShortcut } from "../state/appCommands";
 import { SORT_LABELS, type SortBy } from "../state/treeSort";
 import { FileTree } from "./FileTree";
 import { ContextMenu } from "./ContextMenu";
-import { Book, ChevronDown, FilePlus, FolderPlus, Gear, Monitor, Moon, Plus, Search, SortLines, Sun } from "./icons";
+import { Book, ChevronDown, FilePlus, FolderPlus, Gear, Image, Monitor, Moon, Plus, Search, SortLines, Sun } from "./icons";
 
 function Resizer() {
   const setSidebarWidth = useStore((s) => s.setSidebarWidth);
@@ -125,6 +125,15 @@ export function Sidebar() {
         <button className="new-note" onClick={() => void createNote()} disabled={!vaultRoot} aria-label="New note">
           <Plus />
           <span>New note</span>
+        </button>
+        <button
+          className="icon-button"
+          onClick={() => useStore.getState().setAttachmentsOpen(true)}
+          disabled={!vaultRoot}
+          aria-label="Attachments"
+          title="Attachments: the vault's images"
+        >
+          <Image />
         </button>
         <button className="icon-button" onClick={cycleTheme} aria-label={themeLabel} title={themeLabel}>
           <span className="icon-swap" key={theme}>

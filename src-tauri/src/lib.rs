@@ -55,6 +55,7 @@ pub fn run() {
             vault::create_note,
             vault::create_folder,
             vault::search_vault,
+            vault::list_images,
             vault::rename_path,
             vault::delete_path,
             vault::watch_vault,
