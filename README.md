@@ -90,7 +90,7 @@ so pulling a change that adds a package just works.
 
 ### App icon
 
-The icon's artwork is `assets/app-icon-artwork.webp`. `assets/app-icon.png` is
+The icon's artwork is `assets/app-icon-artwork.png`. `assets/app-icon.png` is
 that artwork cut out and placed on Apple's icon grid (an 824 px rounded square
 with a soft shadow on a 1024 px canvas), so it matches other apps in the Dock.
 To regenerate every size in `src-tauri/icons` from it:
