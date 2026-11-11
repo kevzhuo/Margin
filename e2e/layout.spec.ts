@@ -265,6 +265,38 @@ test("a task's checkbox is centred on its text at every size and font", async ({
   }
 });
 
+test("on an empty task, the caret is the same height as in text and centred on the checkbox, at every size and font", async ({ page }) => {
+  await openApp(page);
+  await loadDoc(page, "# Tasks\n\n- [ ] \n\n- [ ] Text\n");
+  for (const font of ["sans", "serif", "mono"] as const) {
+    for (const size of [13, 16, 24]) {
+      await page.evaluate(({ font, size }) => {
+        const s = window.__margin!.store.getState();
+        s.setFontFamily(font);
+        s.setFontSize(size);
+      }, { font, size });
+      const caretOn = async (marker: string, offset: number) => {
+        await page.evaluate(({ marker, offset }) => {
+          const view = window.__margin!.store.getState().editor!;
+          view.dispatch({ selection: { anchor: view.state.doc.toString().indexOf(marker) + offset } });
+          view.focus();
+        }, { marker, offset });
+        await page.waitForTimeout(80);
+        return page.evaluate(() => {
+          const caret = document.querySelector(".cm-cursor")!.getBoundingClientRect();
+          const line = [...document.querySelectorAll(".cm-line")].find((l) => l.getBoundingClientRect().bottom > caret.top + caret.height / 2)!;
+          const box = line.querySelector("input")!.getBoundingClientRect();
+          return { height: caret.height, offCentre: caret.top + caret.height / 2 - (box.top + box.height / 2) };
+        });
+      };
+      const empty = await caretOn("- [ ] \n", 6);
+      const text = await caretOn("- [ ] Text", 10);
+      expect(Math.abs(empty.height - text.height), `${font} ${size}px height`).toBeLessThan(1);
+      expect(Math.abs(empty.offCentre - text.offCentre), `${font} ${size}px position`).toBeLessThan(1);
+    }
+  }
+});
+
 test("the outline leaves out the title and wraps long headings, with the highlight covering both lines", async ({ page }) => {
   await openApp(page);
   await page.evaluate(async () => {
