@@ -637,6 +637,31 @@ describe("images", () => {
   });
 });
 
+describe("attachments", () => {
+  const png = (name: string) => new File([new Uint8Array([137, 80, 78, 71, 1, 2, 3])], name, { type: "image/png" });
+
+  it("finds which notes use each image, counting what's typed but not yet saved", async () => {
+    const store = await fresh();
+    const [used, gone] = await store.getState().saveImages([png("used.png"), png("gone.png")]);
+    store.getState().updateContent(`# Editor design notes\n\n${used}\n`);
+    const scan = (await store.getState().scanAttachments())!;
+    expect(scan.images.map((i) => i.path)).toEqual([`${R}/attachments/gone.png`, `${R}/attachments/used.png`]);
+    expect(scan.images[0].size).toBe(7);
+    expect(scan.usage.get(`${R}/attachments/used.png`)).toEqual([{ notePath: DESIGN, line: 3 }]);
+    expect(scan.usage.get(`${R}/attachments/gone.png`)).toEqual([]);
+    expect(gone).toContain("gone.png");
+  });
+
+  it("moves images to the trash and says so", async () => {
+    const store = await fresh();
+    await store.getState().saveImages([png("a.png"), png("b.png")]);
+    const moved = await store.getState().trashImages([`${R}/attachments/a.png`, `${R}/attachments/b.png`]);
+    expect(moved).toHaveLength(2);
+    expect(await backend.listImages(R)).toEqual([]);
+    expect(store.getState().toasts.at(-1)?.message).toBe("Deleted 2 images");
+  });
+});
+
 describe("vaults on the welcome screen", () => {
   it("remembers opened vaults, most recent first, without repeats", async () => {
     const store = await fresh();

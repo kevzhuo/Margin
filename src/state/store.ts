@@ -9,6 +9,7 @@ import {
   joinPath,
   stripExtension,
   type FileNode,
+  type ImageFile,
   type VaultBackend,
   type WatchEvent,
 } from "../backend";
@@ -16,6 +17,7 @@ import type { Heading } from "../editor/outline";
 import { fileNameFromTitle, isPlaceholderName, replaceTitle, titleFromDoc } from "./title";
 import { ATTACHMENTS_DIR, MAX_ATTACHMENT_BYTES, attachmentName, imageMarkdown, isImageFile, relativePath } from "./attachments";
 import { SORT_LABELS, touchFile, type SortBy } from "./treeSort";
+import { imageUsage, type ImageUse } from "./attachmentUsage";
 
 const SORT_KEYS = Object.keys(SORT_LABELS) as SortBy[];
 
@@ -51,6 +53,12 @@ export interface Toast {
   message: string;
   kind: "info" | "error";
   leaving?: boolean;
+}
+
+/** The vault's images and the notes that use each, for the Attachments window. */
+export interface AttachmentScan {
+  images: ImageFile[];
+  usage: Map<string, ImageUse[]>;
 }
 
 export interface ConfirmRequest {
@@ -206,6 +214,7 @@ export interface AppState {
   paletteSeed: string;
   paletteVersion: number;
   settingsOpen: boolean;
+  attachmentsOpen: boolean;
   headings: Heading[];
   /** Position of the heading whose section contains the caret, or null. */
   currentHeading: number | null;
@@ -286,6 +295,11 @@ export interface AppState {
   closePalette(): void;
   /** Kept for the existing keyboard shortcut and tests. */
   setSettingsOpen(open: boolean): void;
+  setAttachmentsOpen(open: boolean): void;
+  /** List the vault's images and find which notes use each (the open note as it is now). */
+  scanAttachments(): Promise<AttachmentScan | null>;
+  /** Move images to the Trash. Resolves to the paths that were moved. */
+  trashImages(paths: string[]): Promise<string[]>;
   setHeadings(headings: Heading[]): void;
   setCaret(head: number): void;
   setWordCount(count: number): void;
@@ -499,6 +513,7 @@ export const useStore = create<AppState>((set, get) => {
     paletteSeed: "",
     paletteVersion: 0,
     settingsOpen: false,
+    attachmentsOpen: false,
     headings: [],
     currentHeading: null,
     wordCount: 0,
@@ -1041,6 +1056,43 @@ export const useStore = create<AppState>((set, get) => {
 
     setSettingsOpen(open) {
       set({ settingsOpen: open });
+    },
+
+    setAttachmentsOpen(open) {
+      set(open ? { attachmentsOpen: true, paletteOpen: false, settingsOpen: false } : { attachmentsOpen: false });
+    },
+
+    async scanAttachments() {
+      const { backend, vaultRoot } = get();
+      if (!backend || !vaultRoot) return null;
+      // The open note's latest text counts, and the list of notes is current.
+      await get().flushSave();
+      await get().refreshTree();
+      // A note that can't be read fails the whole scan rather than make its images look unused.
+      const [images, notes] = await Promise.all([
+        backend.listImages(vaultRoot),
+        Promise.all(flattenFiles(get().tree).map(async (f) => ({ path: f.path, text: await backend.readNote(f.path) }))),
+      ]);
+      return { images, usage: imageUsage(vaultRoot, images, notes) };
+    },
+
+    async trashImages(paths) {
+      const { backend } = get();
+      if (!backend) return [];
+      const moved: string[] = [];
+      for (const path of paths) {
+        try {
+          await serially(() => backend.deletePath(path));
+          moved.push(path);
+        } catch (e) {
+          fail(`Could not move ${basename(path)} to the trash`, e);
+        }
+      }
+      if (moved.length) {
+        const what = moved.length === 1 ? `“${basename(moved[0])}”` : `${moved.length} images`;
+        get().pushToast(backend.kind === "tauri" ? `Moved ${what} to the trash` : `Deleted ${what}`);
+      }
+      return moved;
     },
 
     setHeadings(headings) {

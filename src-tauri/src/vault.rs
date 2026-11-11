@@ -625,6 +625,60 @@ fn same_file(a: &Path, b: &Path) -> bool {
     matches!((a.canonicalize(), b.canonicalize()), (Ok(a), Ok(b)) if a == b)
 }
 
+/// An image somewhere in the vault, for the Attachments window.
+#[derive(Serialize, Clone, Debug, PartialEq, Eq)]
+pub struct ImageFile {
+    pub path: String,
+    /// Size in bytes.
+    pub size: u64,
+    /// Last modified, in milliseconds since the Unix epoch.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub modified: Option<u64>,
+}
+
+const IMAGE_EXTENSIONS: &[&str] = &[
+    "png", "jpg", "jpeg", "gif", "webp", "svg", "avif", "heic", "heif", "bmp", "tif", "tiff",
+];
+
+fn is_image(name: &str) -> bool {
+    Path::new(name)
+        .extension()
+        .and_then(|e| e.to_str())
+        .is_some_and(|e| IMAGE_EXTENSIONS.contains(&e.to_ascii_lowercase().as_str()))
+}
+
+/// Every image in a folder and its subfolders (hidden ones skipped), by path.
+pub fn list_images_at(dir: &Path) -> Result<Vec<ImageFile>, String> {
+    let mut out = Vec::new();
+    collect_images(dir, &mut out)?;
+    out.sort_by(|a, b| natural_cmp(&a.path, &b.path));
+    Ok(out)
+}
+
+fn collect_images(dir: &Path, out: &mut Vec<ImageFile>) -> Result<(), String> {
+    let entries = fs::read_dir(dir).map_err(|e| io_err("Could not read folder", e))?;
+    for entry in entries.flatten() {
+        let name = entry.file_name().to_string_lossy().into_owned();
+        let Ok(file_type) = entry.file_type() else {
+            continue;
+        };
+        if is_hidden_name(&name) || file_type.is_symlink() {
+            continue;
+        }
+        if file_type.is_dir() {
+            collect_images(&entry.path(), out)?;
+        } else if file_type.is_file() && is_image(&name) {
+            let meta = entry.metadata().ok();
+            out.push(ImageFile {
+                path: display_path(&entry.path()),
+                size: meta.as_ref().map_or(0, |m| m.len()),
+                modified: meta.and_then(|m| millis(m.modified())),
+            });
+        }
+    }
+    Ok(())
+}
+
 /// Rename or move; refuses to overwrite an existing destination.
 pub fn rename_checked(from: &Path, to: &Path) -> Result<(), String> {
     if !from.exists() {
@@ -858,6 +912,17 @@ pub fn search_vault(
         .clone()
         .ok_or_else(|| "No vault is open".to_string())?;
     search_dir(&root, &query, limit.unwrap_or(100).min(1000))
+}
+
+#[tauri::command]
+pub fn list_images(state: State<'_, VaultState>) -> Result<Vec<ImageFile>, String> {
+    let root = state
+        .root
+        .lock()
+        .unwrap()
+        .clone()
+        .ok_or_else(|| "No vault is open".to_string())?;
+    list_images_at(&root)
 }
 
 #[tauri::command]
@@ -1114,6 +1179,29 @@ mod tests {
             .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
             .collect();
         assert_eq!(names, vec!["Meeting.md"]);
+    }
+
+    #[test]
+    fn list_images_finds_images_in_every_folder_but_hidden_ones() {
+        let tmp = tempdir().unwrap();
+        let root = tmp.path();
+        fs::create_dir_all(root.join("attachments")).unwrap();
+        fs::create_dir_all(root.join("Trips/2026")).unwrap();
+        fs::create_dir_all(root.join(".obsidian")).unwrap();
+        fs::write(root.join("attachments/a.png"), "12345").unwrap();
+        fs::write(root.join("Trips/2026/Beach.JPG"), "x").unwrap();
+        fs::write(root.join(".obsidian/icon.png"), "x").unwrap();
+        fs::write(root.join("note.md"), "# n").unwrap();
+        fs::write(root.join("doc.pdf"), "x").unwrap();
+        let images = list_images_at(root).unwrap();
+        let names: Vec<_> = images
+            .iter()
+            .map(|i| Path::new(&i.path).file_name().unwrap().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(names, vec!["a.png", "Beach.JPG"]);
+        let a = images.iter().find(|i| i.path.ends_with("a.png")).unwrap();
+        assert_eq!(a.size, 5);
+        assert!(a.modified.is_some());
     }
 
     #[test]

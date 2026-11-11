@@ -20,6 +20,7 @@ pub const FILE: &[Item] = &[
     ("note.reveal", "Show in Finder", Some("Alt+CmdOrCtrl+R")),
     ("note.copyPath", "Copy Note Path", None),
     ("note.delete", "Move Note to Trash", None),
+    ("attachments.open", "Manage Attachments…", None),
 ];
 
 pub const FIND: &[Item] = &[

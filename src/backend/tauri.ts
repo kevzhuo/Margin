@@ -2,7 +2,7 @@ import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
-import { assetPath, type FileNode, type SearchHit, type VaultBackend, type WatchEvent } from "./types";
+import { assetPath, type FileNode, type ImageFile, type SearchHit, type VaultBackend, type WatchEvent } from "./types";
 
 /**
  * Rust command contract (see src-tauri/src/vault.rs and menu.rs):
@@ -13,6 +13,7 @@ import { assetPath, type FileNode, type SearchHit, type VaultBackend, type Watch
  *   create_note(dir: string, name: string)      -> string    (new absolute path)
  *   create_folder(dir: string, name: string)    -> string    (new absolute path)
  *   search_vault(query: string, limit: number)  -> SearchHit[]
+ *   list_images()                               -> ImageFile[] (every image in the vault)
  *   rename_path(from: string, to: string)       -> void
  *   delete_path(path: string)                   -> void      (moves to trash)
  *   watch_vault(root: string)                   -> void      (emits "vault://changed")
@@ -93,6 +94,14 @@ export class TauriBackend implements VaultBackend {
   resolveAsset(notePath: string, src: string): string {
     const path = assetPath(notePath, src);
     return path ? convertFileSrc(path) : src;
+  }
+
+  listImages(_root: string): Promise<ImageFile[]> {
+    return invoke<ImageFile[]>("list_images");
+  }
+
+  assetUrl(path: string): string {
+    return convertFileSrc(path);
   }
 
   async openExternal(url: string): Promise<void> {

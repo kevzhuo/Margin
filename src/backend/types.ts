@@ -22,6 +22,15 @@ export interface FileNode {
   created?: number;
 }
 
+/** An image somewhere in the vault. */
+export interface ImageFile {
+  path: string;
+  /** Size in bytes. */
+  size: number;
+  /** Last modified, in milliseconds since 1970, when known. */
+  modified?: number;
+}
+
 export type WatchEventKind = "create" | "modify" | "remove" | "rename" | "any";
 
 export interface WatchEvent {
@@ -101,6 +110,12 @@ export interface VaultBackend {
 
   /** Resolve an image path in a note (relative or absolute) to something an <img> can load. */
   resolveAsset(notePath: string, src: string): string;
+
+  /** Every image in the vault (hidden folders skipped), sorted by path. */
+  listImages(root: string): Promise<ImageFile[]>;
+
+  /** Something an <img> can load for an image's absolute path. */
+  assetUrl(path: string): string;
 
   openExternal(url: string): Promise<void>;
 }

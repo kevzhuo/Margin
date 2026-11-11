@@ -238,6 +238,13 @@ export function appCommands(): AppCommand[] {
     theme("system", "Match system"),
     theme("light", "Light"),
     theme("dark", "Dark"),
+    {
+      id: "attachments.open",
+      title: "Manage attachments…",
+      keywords: "images pictures photos unused clean up delete files media",
+      enabled: hasVault,
+      run: () => useStore.getState().setAttachmentsOpen(true),
+    },
     { id: "settings.open", title: "Open settings", keywords: "preferences appearance", keys: "Mod+,", global: true, run: () => useStore.getState().setSettingsOpen(true) },
   ];
   if (s.backend?.kind === "tauri") {

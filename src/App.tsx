@@ -7,6 +7,7 @@ import { Palette } from "./components/Palette";
 import { Sidebar } from "./components/Sidebar";
 import { StatusBar } from "./components/StatusBar";
 import { TopBar } from "./components/TopBar";
+import { AttachmentsDialog } from "./components/AttachmentsDialog";
 import { ConfirmDialog } from "./components/ConfirmDialog";
 import { SettingsPopover } from "./components/SettingsPopover";
 import { Toasts } from "./components/Toasts";
@@ -276,6 +277,7 @@ export default function App() {
       </div>
       <Palette />
       <SettingsPopover />
+      <AttachmentsDialog />
       <ConfirmDialog />
       <Toasts />
     </div>

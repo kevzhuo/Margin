@@ -158,3 +158,15 @@ export const BookOpen = ({ size = 16, ...p }: IconProps) => (
     <path d="M12 7v13" />
   </svg>
 );
+export const Image = ({ size = 16, ...p }: IconProps) => (
+  <svg {...base(size, p)}>
+    <rect x="3" y="4" width="18" height="16" rx="2" />
+    <circle cx="9" cy="10" r="1.5" />
+    <path d="M21 16l-5-5-8 8" />
+  </svg>
+);
+export const Trash = ({ size = 16, ...p }: IconProps) => (
+  <svg {...base(size, p)}>
+    <path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3" />
+  </svg>
+);

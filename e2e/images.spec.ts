@@ -152,3 +152,43 @@ test("a file dropped outside the editor is refused instead of opened", async ({ 
   });
   expect(refused).toBe(true);
 });
+
+test("the Attachments window lists images, the notes using them, and cleans up the unused ones", async ({ page }) => {
+  await openNote(page, "# Photos\n\n");
+  await placeCaret(page, "# Photos", 8);
+  await page.keyboard.press("Enter");
+  await sendImage(page, "paste", "kept.png", [40, 30]);
+  await expect.poll(() => docText(page)).toContain("![kept](../attachments/kept.png)");
+  await page.keyboard.press("Enter");
+  await sendImage(page, "paste", "removed.png", [40, 30]);
+  await expect.poll(() => docText(page)).toContain("removed.png");
+  // Take the second image back out of the note.
+  await page.evaluate(() => {
+    const view = window.__margin!.store.getState().editor!;
+    const doc = view.state.doc.toString();
+    const from = doc.indexOf("![removed]");
+    view.dispatch({ changes: { from, to: doc.indexOf(")", from) + 1 } });
+  });
+
+  await page.locator(".sidebar-foot").getByRole("button", { name: "Attachments" }).click();
+  const dialog = page.getByRole("dialog", { name: "Attachments" });
+  await expect(dialog.locator(".attachment")).toHaveCount(2);
+  await expect(dialog.locator(".attachment", { hasText: "kept.png" })).toContainText("In Photos");
+  await expect(dialog.locator(".attachment", { hasText: "removed.png" })).toContainText("Not used in any note");
+  await dialog.getByRole("radio", { name: /Unused/ }).click();
+  await expect(dialog.locator(".attachment")).toHaveCount(1);
+
+  await expect(dialog.locator(".attachments-cleanup")).toContainText("1 image isn’t used in any note");
+  await dialog.getByRole("button", { name: "Clean up unused…" }).click();
+  const confirm = page.getByRole("alertdialog");
+  await expect(confirm).toContainText("Move 1 unused image to the trash?");
+  await confirm.getByRole("button", { name: "Move to Trash" }).click();
+  await expect(page.locator(".toast")).toContainText("Deleted “removed.png”");
+  await expect(dialog.locator(".attachment")).toHaveCount(1);
+  await expect(dialog.locator(".attachments-cleanup")).toHaveCount(0);
+
+  // Clicking the note a picture is in opens it at that line.
+  await dialog.getByRole("button", { name: "Photos" }).click();
+  await expect(dialog).toBeHidden();
+  await expect(page.locator(".crumb.current")).toContainText("Photos");
+});

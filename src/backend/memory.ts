@@ -10,6 +10,7 @@ import {
   joinPath,
   SEARCH_LINE_MAX,
   type FileNode,
+  type ImageFile,
   type SearchHit,
   type VaultBackend,
   type WatchEvent,
@@ -185,8 +186,8 @@ export class MemoryBackend implements VaultBackend {
   private dirs: Set<string>;
   private times: Record<string, FileTimes>;
   private listeners = new Set<(e: WatchEvent) => void>();
-  /** Saved images: path to an object URL. Kept in memory only; images are too big for localStorage. */
-  private assets = new Map<string, string>();
+  /** Saved images by path. Kept in memory only; images are too big for localStorage. */
+  private assets = new Map<string, { url: string; size: number; modified: number }>();
 
   constructor(initial?: Record<string, string>, initialDirs: string[] = []) {
     if (initial) {
@@ -218,7 +219,7 @@ export class MemoryBackend implements VaultBackend {
   private dirExists(path: string): boolean {
     if (this.dirs.has(path)) return true;
     const prefix = path + "/";
-    return Object.keys(this.files).some((p) => p.startsWith(prefix)) || [...this.dirs].some((d) => d.startsWith(prefix));
+    return [...Object.keys(this.files), ...this.dirs, ...this.assets.keys()].some((p) => p.startsWith(prefix));
   }
 
   private emit(event: WatchEvent) {
@@ -343,6 +344,11 @@ export class MemoryBackend implements VaultBackend {
         }
       }
       Object.assign(this.files, moved);
+      for (const [p, asset] of [...this.assets]) {
+        if (!p.startsWith(prefix)) continue;
+        this.assets.delete(p);
+        this.assets.set(joinPath(to, p.slice(prefix.length)), asset);
+      }
       const dirs = new Set<string>();
       for (const d of this.dirs) dirs.add(d === from ? to : d.startsWith(prefix) ? joinPath(to, d.slice(prefix.length)) : d);
       this.dirs = dirs;
@@ -354,7 +360,9 @@ export class MemoryBackend implements VaultBackend {
   }
 
   async deletePath(path: string): Promise<void> {
-    if (this.files[path] !== undefined) {
+    if (this.assets.has(path)) {
+      this.assets.delete(path);
+    } else if (this.files[path] !== undefined) {
       delete this.files[path];
       delete this.times[path];
     } else {
@@ -364,6 +372,7 @@ export class MemoryBackend implements VaultBackend {
         delete this.files[p];
         delete this.times[p];
       }
+      for (const p of [...this.assets.keys()]) if (p.startsWith(prefix)) this.assets.delete(p);
       for (const d of [...this.dirs]) if (d === path || d.startsWith(prefix)) this.dirs.delete(d);
     }
     this.persist();
@@ -411,13 +420,24 @@ export class MemoryBackend implements VaultBackend {
     let candidate = joinPath(dir, clean);
     for (let i = 2; this.assets.has(candidate) || this.files[candidate] !== undefined; i++) candidate = joinPath(dir, `${stem} ${i}${ext}`);
     const url = typeof URL.createObjectURL === "function" ? URL.createObjectURL(new Blob([data.slice()])) : `memory:${candidate}`;
-    this.assets.set(candidate, url);
+    this.assets.set(candidate, { url, size: data.byteLength, modified: Date.now() });
     return candidate;
   }
 
   resolveAsset(notePath: string, src: string): string {
     const path = assetPath(notePath, src);
-    return (path && this.assets.get(path)) ?? src;
+    return (path && this.assets.get(path)?.url) ?? src;
+  }
+
+  async listImages(root: string): Promise<ImageFile[]> {
+    return [...this.assets]
+      .filter(([path]) => isWithin(path, root))
+      .map(([path, { size, modified }]) => ({ path, size, modified }))
+      .sort((a, b) => a.path.localeCompare(b.path, undefined, { numeric: true, sensitivity: "base" }));
+  }
+
+  assetUrl(path: string): string {
+    return this.assets.get(path)?.url ?? "";
   }
 
   async openExternal(url: string): Promise<void> {

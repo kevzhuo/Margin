@@ -2,38 +2,8 @@ import { useEffect, useRef, type ReactNode } from "react";
 import { FONT_SIZE_DEFAULT, FONT_SIZE_MAX, FONT_SIZE_MIN, useStore, type FontFamily, type LineWidth, type ThemePref } from "../state/store";
 import { formatShortcut } from "../state/appCommands";
 import { usePresence } from "./usePresence";
+import { Segmented } from "./Segmented";
 
-function Segmented<T extends string>({
-  label,
-  value,
-  options,
-  onChange,
-  disabled,
-}: {
-  label: string;
-  value: T;
-  options: [T, string][];
-  onChange: (v: T) => void;
-  disabled?: boolean;
-}) {
-  const index = Math.max(0, options.findIndex(([v]) => v === value));
-  return (
-    <div
-      className={`segmented${disabled ? " disabled" : ""}`}
-      role="radiogroup"
-      aria-label={label}
-      aria-disabled={disabled || undefined}
-      style={{ "--count": options.length, "--index": index } as React.CSSProperties}
-    >
-      <span className="segmented-thumb" aria-hidden="true" />
-      {options.map(([v, text]) => (
-        <button key={v} role="radio" aria-checked={v === value} className={v === value ? "on" : ""} disabled={disabled} onClick={() => onChange(v)}>
-          {text}
-        </button>
-      ))}
-    </div>
-  );
-}
 
 function Toggle({ label, hint, checked, onChange }: { label: string; hint?: string; checked: boolean; onChange: (v: boolean) => void }) {
   return (

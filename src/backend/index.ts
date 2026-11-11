@@ -24,6 +24,12 @@ export function platform(): "macos" | "windows" | "linux" | "unknown" {
   return "unknown";
 }
 
+/** What the system file manager's "reveal" command is called here. */
+export function fileManagerLabel(): string {
+  const p = platform();
+  return p === "macos" ? "Show in Finder" : p === "windows" ? "Show in Explorer" : "Show in file manager";
+}
+
 let backend: VaultBackend | null = null;
 
 export async function getBackend(): Promise<VaultBackend> {

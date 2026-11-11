@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent, type MouseEvent } from "react";
-import { dirname, isWithin, platform, stripExtension, type FileNode } from "../backend";
+import { dirname, fileManagerLabel, isWithin, stripExtension, type FileNode } from "../backend";
 import { useStore } from "../state/store";
 import { sortTree } from "../state/treeSort";
 import { confirmAndDelete, formatShortcut } from "../state/appCommands";
@@ -158,7 +158,6 @@ function Row({ node, depth, onMenu, dropTarget, onDragStart }: RowProps) {
   );
 }
 
-const fileManagerLabel = () => (platform() === "macos" ? "Show in Finder" : platform() === "windows" ? "Show in Explorer" : "Show in file manager");
 
 export function FileTree() {
   const fullTree = useStore((s) => s.tree);

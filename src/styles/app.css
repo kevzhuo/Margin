@@ -1094,6 +1094,163 @@ html.titlebar-overlay .outline {
   box-shadow: inset 0 0 0 1px var(--border);
 }
 
+/* ---------- Attachments ---------- */
+.attachments {
+  width: min(760px, calc(100vw - 32px));
+  height: min(620px, calc(100vh - 64px));
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-elevated);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  animation: dialog-in var(--dur) var(--ease-out);
+}
+.attachments[data-closing] {
+  animation: dialog-out 140ms var(--ease-in) forwards;
+}
+.attachments-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 14px 14px 20px;
+  border-bottom: 1px solid var(--border);
+}
+.attachments-head h2 {
+  margin: 0 auto 0 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+.attachments-head .segmented {
+  width: 200px;
+}
+.segmented .count {
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+  margin-left: 2px;
+}
+.attachments-cleanup {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px 10px 20px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-2);
+  background: color-mix(in srgb, var(--danger) 6%, transparent);
+}
+.attachments-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 16px;
+}
+.attachments-empty {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: var(--text-3);
+  text-align: center;
+}
+.attachments-empty p {
+  margin: 0;
+  max-width: 320px;
+  line-height: 1.5;
+}
+.attachments-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+  gap: 14px;
+}
+.attachment {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--radius-lg);
+  box-shadow: inset 0 0 0 1px var(--border);
+  overflow: hidden;
+  animation: fade-in var(--dur) var(--ease-out);
+}
+.attachment-thumb {
+  aspect-ratio: 4 / 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--code-bg);
+  border-bottom: 1px solid var(--border);
+}
+.attachment-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.attachment[data-unused] .attachment-thumb img {
+  opacity: 0.55;
+}
+.attachment-info {
+  padding: 8px 10px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.attachment-name {
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.attachment-meta,
+.attachment-uses {
+  font-size: 12px;
+  color: var(--text-3);
+}
+.attachment-uses {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.attachment-unused {
+  color: var(--danger);
+}
+.attachment-note {
+  color: var(--text-2);
+  text-decoration: underline;
+  text-decoration-color: var(--border);
+  text-underline-offset: 2px;
+}
+.attachment-note:hover {
+  color: var(--accent);
+  text-decoration-color: currentColor;
+}
+/* Actions float over the picture, showing on hover or keyboard focus. */
+.attachment-actions {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow);
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+.attachment:hover .attachment-actions,
+.attachment-actions:focus-within {
+  opacity: 1;
+}
+.icon-button.danger:hover:not(:disabled) {
+  color: var(--danger);
+}
+
 .confirm {
   width: min(380px, calc(100vw - 32px));
   background: var(--bg-elevated);
