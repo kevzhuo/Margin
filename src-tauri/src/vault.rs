@@ -589,15 +589,7 @@ pub fn search_dir(root: &Path, query: &str, limit: usize) -> Result<Vec<SearchHi
         let mut heading: Option<&str> = None;
         let mut in_fence = false;
         for (i, line) in content.lines().enumerate() {
-            let matched = line.to_lowercase().contains(&needle);
-            if matched {
-                hits.push(SearchHit {
-                    path: path.clone(),
-                    line: i + 1,
-                    text: line.trim().chars().take(SEARCH_LINE_MAX).collect(),
-                    heading: heading.map(str::to_string),
-                });
-            }
+            // A heading line belongs to its own section.
             let trimmed = line.trim_start();
             if trimmed.starts_with("```") || trimmed.starts_with("~~~") {
                 in_fence = !in_fence;
@@ -606,9 +598,15 @@ pub fn search_dir(root: &Path, query: &str, limit: usize) -> Result<Vec<SearchHi
                     heading = Some(text);
                 }
             }
-            if !matched {
+            if !line.to_lowercase().contains(&needle) {
                 continue;
             }
+            hits.push(SearchHit {
+                path: path.clone(),
+                line: i + 1,
+                text: line.trim().chars().take(SEARCH_LINE_MAX).collect(),
+                heading: heading.map(str::to_string),
+            });
             if hits.len() >= limit {
                 return Ok(hits);
             }
@@ -1098,6 +1096,30 @@ mod tests {
         );
         assert_eq!(search_dir(root, "typora", 2).unwrap().len(), 2);
         assert!(search_dir(root, "   ", 10).unwrap().is_empty());
+    }
+
+    #[test]
+    fn search_puts_each_line_in_its_section_and_a_heading_in_its_own() {
+        let tmp = tempdir().unwrap();
+        let root = tmp.path();
+        fs::write(
+            root.join("n.md"),
+            "# Trip\n\n## Budget\nsunset tickets\n\n## Sunset spots\nthe best sunset\n",
+        )
+        .unwrap();
+        let sections: Vec<(String, Option<String>)> = search_dir(root, "sunset", 10)
+            .unwrap()
+            .into_iter()
+            .map(|h| (h.text, h.heading))
+            .collect();
+        assert_eq!(
+            sections,
+            vec![
+                ("sunset tickets".to_string(), Some("Budget".to_string())),
+                ("## Sunset spots".to_string(), Some("Sunset spots".to_string())),
+                ("the best sunset".to_string(), Some("Sunset spots".to_string())),
+            ]
+        );
     }
 
     #[test]

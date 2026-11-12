@@ -394,11 +394,12 @@ export class MemoryBackend implements VaultBackend {
       const lines = this.files[path].split("\n");
       for (let i = 0; i < lines.length && perFile < 5; i++) {
         const line = lines[i];
-        const matched = line.toLowerCase().includes(q);
-        if (matched) hits.push({ path, line: i + 1, text: line.trim().slice(0, SEARCH_LINE_MAX), heading });
+        // A heading line belongs to its own section.
         if (/^\s*(```|~~~)/.test(line)) inFence = !inFence;
         else if (!inFence) heading = headingText(line) ?? heading;
+        const matched = line.toLowerCase().includes(q);
         if (!matched) continue;
+        hits.push({ path, line: i + 1, text: line.trim().slice(0, SEARCH_LINE_MAX), heading });
         perFile++;
         if (hits.length >= limit) return hits;
       }

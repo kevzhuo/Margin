@@ -148,9 +148,9 @@ export function Palette() {
             const text = markdownToText(hit.text) || hit.text;
             // A match on a note's own title line repeats the note itself.
             if (text === title) return [];
-            // The section a match is in; a note's title heading adds nothing.
+            // The section a match is in; a note's title heading, or the matched heading itself, adds nothing.
             const section = hit.heading ? markdownToText(hit.heading) : null;
-            return [{ kind: "hit" as const, key: `h:${hit.path}:${hit.line}`, hit, title, section: section && section !== title ? section : null, text }];
+            return [{ kind: "hit" as const, key: `h:${hit.path}:${hit.line}`, hit, title, section: section && section !== title && section !== text ? section : null, text }];
           })
         : [];
     const out = [...notes, ...contentHits];

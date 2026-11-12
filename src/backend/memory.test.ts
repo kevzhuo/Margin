@@ -186,6 +186,16 @@ describe("folders and search", () => {
     expect(await b.listTree(R)).toEqual([]);
   });
 
+  it("puts each match in its section, and a matching heading in its own", async () => {
+    const b = new MemoryBackend({ [`${R}/n.md`]: "# Trip\n\n## Budget\nsunset tickets\n\n## Sunset spots\nthe best sunset\n" });
+    const hits = await b.searchVault(R, "sunset");
+    expect(hits.map((h) => [h.text, h.heading])).toEqual([
+      ["sunset tickets", "Budget"],
+      ["## Sunset spots", "Sunset spots"],
+      ["the best sunset", "Sunset spots"],
+    ]);
+  });
+
   it("searches case-insensitively in natural path order with a per-note cap", async () => {
     const b = new MemoryBackend({
       [`${R}/b.md`]: "Typora\nno\nTYPORA again",

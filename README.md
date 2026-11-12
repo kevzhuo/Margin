@@ -1,224 +1,191 @@
-# Margin
+<p align="center">
+  <img src="src-tauri/icons/128x128@2x.png" width="128" height="128" alt="Margin's icon: a red notebook glowing over a moonlit planet">
+</p>
 
-A local Markdown editor in the spirit of Typora, with the look of macOS and Notion.
-Your notes are plain `.md` files in a folder you choose. Nothing is copied into a
-database, and nothing moves on screen when you click into a line.
+<h1 align="center">Margin</h1>
 
-- **One pane, no preview toggle.** The document is always rendered. The element
-  under the caret reveals its Markdown; everything else reads like a finished page.
-- **Markers live in the margin.** `#` and `>` appear to the left of the text
-  when revealed, so headings keep their size and text never shifts. A task's
-  checkbox stays a checkbox even on the line you're editing.
-- **Files are the source of truth.** The editor is CodeMirror 6 over the raw
-  Markdown string with a decoration layer on top, so round trips are lossless.
-- **Native chrome.** Tauri 2 shell: a few megabytes, system webview, inset traffic
-  lights and a translucent sidebar on macOS.
+<p align="center">
+  A calm Markdown editor for your own folder of notes.<br>
+  Always rendered, never a preview pane, and every note stays a plain <code>.md</code> file.
+</p>
+
+<p align="center">
+  <img src="docs/images/editor-light.png" alt="Margin with a travel note open: headings, a task list, a table, a formula and a quote, all rendered">
+</p>
+
+## What it is
+
+Margin is a desktop app for writing in Markdown that looks like a finished page
+while you write it. There's no split view and no preview button: headings,
+lists, tables, images and maths are rendered in place, and only the part you're
+editing shows its Markdown. Click into a bold word and its `**` appear; click
+away and they're gone. Nothing on the page jumps around when that happens.
+
+Your notes are ordinary Markdown files in a folder you choose (a *vault*).
+Margin doesn't copy them into a database, so you can open the same folder in
+Obsidian, Typora, VS Code or GitHub, back it up any way you like, or sync it
+with iCloud Drive.
+
+It's built for the Mac, with a native menu bar, a translucent sidebar, trackpad
+swipes and a light or dark look that follows your system. It builds for Windows
+and Linux too.
 
 ## Features
 
-| Area | What works |
-| --- | --- |
-| Live preview | Headings, bold, italic, strikethrough, inline code, links, bare URLs, images, LaTeX math, bullet and numbered lists, task lists with real checkboxes, blockquotes, fenced code with syntax highlighting and a language label, tables (rendered with bold, code, links and math inside cells, keeping their quote bar or list indent, and shown as plain source while the caret is inside), horizontal rules, escapes, YAML front matter. An image that can't be found shows its file name in a dashed box |
-| Images | Paste a screenshot, drag photos in from Finder or a browser, or type `/image` to pick files. Each image is copied into an `attachments` folder at the top of the vault (never overwriting: a second `photo.png` becomes `photo 2.png`) and linked with a standard relative path, so Typora, Obsidian, VS Code and GitHub show it too. A drop in the middle of a sentence lands on its own line after it. With the caret on an image's link, the picture stays visible underneath |
-| Attachments | File › Manage Attachments…, the picture button at the bottom of the sidebar, or the palette opens a window of every image in the vault, with its size, date and the notes that use it (click one to jump there). Show it in Finder or move it to the Trash, with a warning if a note still uses it. Images no note uses are marked, and Clean up unused moves them all to the Trash in one go (recoverable). An image counts as used if any note links to it, embeds it (`![[...]]` or `<img>`), or even mentions its file name |
-| Math | `$…$` inline and `$$…$$` blocks, rendered with KaTeX (bundled, so it works offline). Moving the caret into a formula shows its TeX; blocks show a live preview under the source as you type. A formula with a mistake shows its source in red with the reason. Prices like "$5 and $10" stay text, `\$` is a literal dollar, and an unfinished `$$` never turns the rest of the note into math. `/math`, `Mod+Alt+B` or typing `$` over a selection start one |
-| Writing | Slash menu on an empty line, a formatting toolbar over selected text, typing `*`, `_`, `` ` ``, `~`, `$` or `"` over a selection wraps it, smart typography (quotes become “curly”, `--` an em dash and `...` an ellipsis as you type, never in code, math, URLs or front matter; ⌘Z right after brings back what you typed; can be turned off in Settings), brackets close themselves, pasting a URL over text makes a link, Enter continues lists, and a find and replace bar that floats over the note with a match count and case, whole-word and regex toggles |
-| Status | A word count (and how many are selected), plus a reading time once a note takes a minute or more to read |
-| Focus and reading | Focus mode dims everything but the line you are on; typewriter mode keeps the caret near the middle of the window; reading mode (`Mod+Shift+E` or the book button) hides every bit of Markdown, even on the caret's line, and makes the note read-only, while text can still be selected and tasks ticked |
-| Navigation | Command palette, quick switcher with recent notes and full-text search (each match shows its note, its section and the line without Markdown syntax) that jumps to and highlights the match, back and forward history (buttons, shortcuts, or a two-finger swipe), caret and scroll position remembered per note, relative links like `[x](Other.md#heading)` open in the app, an outline of the note's sections (the title is left out, since it already heads the page; long headings wrap to two lines) |
-| Titles | A note's first heading is its name: editing it renames the file once you pause, renaming the file updates the heading, and new notes open with the title selected. Notes whose file name was set deliberately are left alone. Can be turned off in Settings |
-| macOS | Native menu bar (File, Edit, View, Go, Format, Window) with standard shortcuts and Format items for math and images, translucent sidebar that follows Margin's theme rather than only the system's (with a dark wash in dark mode), inset traffic lights, two-finger swipe for back and forward, quotes that hang into the margin |
-| Vault | A welcome screen to open a folder, create a vault, or reopen a recent one; file tree with notes and folders, sorted by name, last edited or date created (newest first, folders first, a folder as new as its newest note), under a vault name and search box that stay put while the list scrolls (the `attachments` folder stays out of the way until it holds a note), new notes go in the open note's folder, drag and drop to move, rename inline, delete to the trash with a confirmation, copy path, show in Finder, resizable sidebar, autosave with atomic writes that keep a note's creation date and permissions, saving before the window closes or the app quits, and changes made by other apps picked up quietly (unsaved edits in Margin always win; there is no conflict prompt) |
-| Layout | Full width or a centered column with margins (top bar button, Settings, or the palette), gutters that scale with the editor's width, hanging indents for wrapped list items and real nesting, tighter spacing between blocks, tables that wrap or scroll inside their own box, and panels that step aside in small windows and open as overlays instead |
-| Appearance | Light and dark palettes that follow the system, sans, serif or mono text, adjustable text size and line width, an accent caret that fades rather than blinks (optionally gliding), a hairline under the top bar once a note scrolls, slim scrollbars on Windows and Linux, smooth transitions throughout that switch off when the system asks for reduced motion |
-| Window | Opens without a flash in either theme and remembers its size and position |
+### Writing
 
-## Keyboard shortcuts
+<p align="center">
+  <img src="docs/images/live-preview.png" alt="The same lines three ways: fully rendered; with the caret in an italic word, which shows its asterisks; and with the caret on a heading, whose ## appears in the margin">
+</p>
+<p align="center"><sub>The same lines as they read (left), with the caret in an italic word, which shows its <code>*</code> (middle), and with the caret on a heading, whose <code>##</code> appears in the margin (right).</sub></p>
 
-`Mod` is Cmd on macOS and Ctrl elsewhere.
+- **Live preview.** Only the element under the caret reveals its Markdown.
+  Heading `#`s and quote `>`s appear in the left margin, so text never shifts
+  when you click into a line.
+- **Everything you'd expect from Markdown:** headings, emphasis, links, lists,
+  task lists with real checkboxes, quotes, tables (with formatting inside
+  cells), code blocks with syntax highlighting, horizontal rules and YAML front
+  matter.
+- **Maths** with `$…$` and `$$…$$`, rendered by KaTeX, offline.
+- **Fast formatting:** type `/` for a block menu, select text for a formatting
+  toolbar, or type `*`, `` ` `` or `$` over a selection to wrap it.
+- **Smart typography:** “curly quotes”, em dashes from `--` and ellipses from
+  `...` as you type (never inside code or maths, and one ⌘Z away from undoing).
+- **Find and replace** in the note, with case, whole-word and regex options.
 
-| Shortcut | Action |
-| --- | --- |
-| `Mod+P` or `Mod+O` | Go to a note, or search all notes |
-| `Mod+Shift+P` | Run a command (or type `>` in the switcher) |
-| `Mod+Shift+F` | Search all notes |
-| `Mod+F` | Find and replace in the note |
-| `Mod+N` / `Mod+Shift+N` | New note / new folder |
-| `Mod+[` / `Mod+]` | Back / forward |
-| `F2` | Rename the open note |
-| `Mod+B` `Mod+I` `Mod+E` `Mod+K` `Mod+Shift+X` | Bold, italic, inline code, link, strikethrough |
-| `Mod+1` … `Mod+6`, `Mod+0` | Heading level, or plain paragraph |
-| `Mod+Enter` | Toggle a task |
-| `Mod+Shift+M` / `Mod+Alt+B` | Inline math / math block |
-| `Mod+=` / `Mod+-` | Larger / smaller text |
-| `Mod+\` / `Mod+Shift+\` | Toggle the sidebar / outline |
-| `Mod+Shift+E` | Reading mode |
-| `F8` / `F9` | Focus mode / typewriter mode |
-| `Mod+,` | Settings |
-| `Shift+Mod+/` | Keyboard shortcuts (macOS menu) |
+### Images
 
-## Development
+Paste a screenshot, drag in photos, or type `/image`. Each image is copied into
+an `attachments` folder in your vault and linked with an ordinary relative
+path, so other Markdown apps show it too.
 
-Requirements: Node 22, Rust stable, and the Tauri prerequisites for your OS
-(see https://v2.tauri.app/start/prerequisites/).
+When pictures pile up, **Manage Attachments** shows every image in the vault,
+which notes use it, and lets you clear out the ones no note uses any more (they
+go to the Trash, so nothing is lost by accident).
+
+<p align="center">
+  <img src="docs/images/attachments.png" width="760" alt="The Attachments window: four images, two in use by a note and two marked as not used in any note, with a Clean up unused button">
+</p>
+
+### Finding your way
+
+- **Quick switcher and full-text search** (⌘P): jump to a note by name, or to
+  any line in any note. Results show which section a match is in.
+- **Command palette** (⇧⌘P) for every action, with its shortcut.
+- **Outline** of the note's sections, back and forward history (or a
+  two-finger swipe), and links between notes that open in the app.
+
+<p align="center">
+  <img src="docs/images/search.png" alt="Searching for “sunset”: three matches in a note, each with its section and the matching line">
+</p>
+
+### Organising
+
+- A sidebar of notes and folders. Drag to move, rename in place, and sort by
+  name, last edited or date created.
+- **A note's title is its file name.** Edit the first heading and the file is
+  renamed to match; rename the file and the heading follows.
+- **Safe saving.** Notes save automatically as you type, never leave a
+  half-written file behind, and are saved before the app quits. Changes made by
+  other apps (or another computer, through sync) appear on their own.
+
+### Reading and focus
+
+- **Reading mode** (⇧⌘E) hides every bit of Markdown and makes the note
+  read-only.
+- **Focus mode** dims everything but the paragraph you're in; **typewriter
+  mode** keeps the line you're writing in the middle of the window.
+- Choose sans, serif or mono text, the text size and the line width, or let
+  the page use the whole window.
+
+<p align="center">
+  <img src="docs/images/editor-dark.png" alt="Margin in dark mode, showing a photo of a sunset and a Python code block">
+</p>
+
+## Getting started
+
+Margin doesn't ship prebuilt downloads yet, so you build it yourself. You'll
+need [Node.js](https://nodejs.org) 22 or newer, [Rust](https://rustup.rs), and
+the [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) for your
+system (on a Mac, that's just the Xcode command line tools).
 
 ```bash
-npm install
+git clone https://github.com/kevzhuo/Margin.git
 ```
-
-Run the UI in a browser with an in-memory demo vault (no Rust needed):
 
 ```bash
-npm run dev
+cd Margin && npm install
 ```
-
-Run the desktop app:
-
-```bash
-npm run tauri dev
-```
-
-Build installers for the current platform into `src-tauri/target/release/bundle`:
 
 ```bash
 npm run tauri build
 ```
 
-`npm run dev` and `npm run build` (and so the two `tauri` commands) first
-install dependencies if `package-lock.json` changed since the last install,
-so pulling a change that adds a package just works.
+On a Mac the app appears in `src-tauri/target/release/bundle/macos/Margin.app`;
+drag it into Applications. Windows and Linux installers are written next to it
+in `src-tauri/target/release/bundle/`.
 
-### App icon
+When you open Margin, choose a folder of notes (or create a new, empty vault).
+To update later, pull the latest code and run the build command again.
 
-The icon's artwork is `assets/app-icon-artwork.png`. `assets/app-icon.png` is
-that artwork cut out and placed on Apple's icon grid (an 824 px rounded square
-with a soft shadow on a 1024 px canvas), so it matches other apps in the Dock.
-To regenerate every size in `src-tauri/icons` from it:
+## Keyboard shortcuts
+
+On Windows and Linux, use Ctrl where these say ⌘.
+
+| Shortcut | Action |
+| --- | --- |
+| ⌘P | Go to a note, or search every note |
+| ⇧⌘P | Run any command |
+| ⌘F | Find and replace in this note |
+| ⌘N / ⇧⌘N | New note / new folder |
+| ⌘[ / ⌘] | Back / forward |
+| ⌘B, ⌘I, ⌘E, ⌘K | Bold, italic, inline code, link |
+| ⌘1 – ⌘6, ⌘0 | Heading level, or plain text |
+| ⌘Return | Tick or untick a task |
+| ⇧⌘E | Reading mode |
+| F8 / F9 | Focus mode / typewriter mode |
+| ⌘\\ / ⇧⌘\\ | Show or hide the sidebar / outline |
+| ⌘, | Settings |
+
+Every other command, with its shortcut, is in the command palette (⇧⌘P) and the
+menu bar.
+
+## Development
+
+Margin is a [Tauri 2](https://tauri.app) app: a small Rust shell around a web
+interface written in TypeScript with React, and an editor built on
+[CodeMirror 6](https://codemirror.net).
 
 ```bash
-npx tauri icon assets/app-icon.png
+npm run dev
 ```
 
-That also writes Android and iOS icon sets, which this app doesn't use; delete
-`src-tauri/icons/android` and `src-tauri/icons/ios` afterwards.
-
-### Checks
+runs the interface in a browser with a built-in demo vault (no Rust needed), and
 
 ```bash
-npm run typecheck
+npm run tauri dev
 ```
+
+runs the desktop app. Before sending a change, run the checks: type checking,
+unit tests, and end-to-end tests that drive the real editor in Chromium.
 
 ```bash
-npm test
+npm run check
 ```
-
-```bash
-npm run test:e2e
-```
-
-The end-to-end suite runs the real editor in Chromium against the demo vault,
-and asserts the layout-stability rules (for example, that a heading's line box
-has the same height before and after its `#` is revealed).
-
-Rust unit tests for the vault commands:
 
 ```bash
 cd src-tauri && cargo test
 ```
 
-## Project layout
+How the live preview, saving and the rest work under the hood is described in
+[docs/architecture.md](docs/architecture.md).
 
-```
-src/
-  backend/        VaultBackend interface, Tauri adapter, in-memory demo vault
-  editor/         CodeMirror extensions: live preview, widgets, math syntax and
-                  rendering, image paste and drop, commands, slash menu,
-                  bubble toolbar, typewriter scrolling, selection wrapping
-  components/     React UI: sidebar, file tree, top bar, editor pane, outline,
-                  palette, settings, dialogs, toasts
-  state/          zustand store (vault, history, autosave, settings, attachments)
-                  and the command registry
-  styles/         design tokens, motion keyframes, and stylesheets
-src-tauri/        Rust shell: window config, vault commands, file watcher
-assets/           the app icon's artwork and its 1024 px master
-scripts/          ensure-deps.mjs, which installs changed dependencies before dev and build
-e2e/              Playwright tests
-docs/research.md  the research and design notes this project was built from
-```
+## Roadmap
 
-## How the live preview works
-
-`src/editor/livePreview.ts` builds decorations from the Lezer Markdown syntax
-tree whenever the document, selection, focus, or visible range changes: a view
-plugin covers what is on screen, and a small state field holds the block
-widgets (tables, math blocks, image previews).
-
-- Heading size and weight come from line decorations that apply in both states.
-- List items are padded by nesting depth plus a fixed-width marker box, and
-  the first line is pulled back by the marker width, so wrapped lines hang
-  under the text. The raw indentation is hidden in both states.
-- Inline delimiters (`**`, `*`, `` ` ``, `[`, `](url)`) are replaced with empty
-  decorations unless a selection range touches the element they belong to.
-- Block delimiters (`#`, `>`) are replaced when the caret is off the line and
-  rendered as absolutely positioned marks in the left margin when it is on it.
-- A bullet marker and its revealed `-` share one fixed-width inline box, so the
-  text after it does not move.
-- Checkboxes, images, math, horizontal rules, code-fence language labels, and
-  tables are widgets. Tables and `$$` math blocks are block widgets that drop
-  back to their source when the caret enters them; a math block then gets a
-  live preview underneath, and so does an image whose link the caret is on.
-- Math syntax comes from a small Lezer extension (`src/editor/mathSyntax.ts`),
-  so formulas are real syntax-tree nodes: Markdown inside them is never parsed,
-  and code spans and fences are never mistaken for math. KaTeX output is cached
-  per formula.
-- Syntax colours are plain classes (`src/editor/highlight.ts`) that the
-  stylesheet applies only inside fenced code, so Markdown's own tokens, such
-  as a bare URL or an escaped `\*`, never pick up code colours in prose.
-- Table cells are rendered by `src/editor/inlineMarkdown.ts`, which runs the
-  editor's own parser over each cell; search results use it too, to show
-  matching lines without their Markdown syntax.
-
-## Images and the vault
-
-Images are saved by the Rust command `save_attachment`, which receives the
-image's bytes as the raw request body (no JSON, so large photos stay fast),
-cleans the file name, and creates the file with `create_new` so nothing is ever
-overwritten. The web view can load images only from the open vault: the asset
-protocol starts with an empty scope and each vault is allowed when it is opened.
-A file dropped anywhere the editor doesn't take it is refused, so a stray drop
-can't replace the app with the file.
-
-## Performance
-
-Live preview decorates only the part of a note that is on screen (rendered
-tables and math blocks live in a small separate field, because CodeMirror only allows block
-widgets from state fields). The outline and word count update after a short
-pause instead of on every keystroke. In a 3,600-line note a keystroke takes
-about 3 ms (it was about 19 ms when the whole note was decorated), and an
-end-to-end test keeps it under 10 ms, with the same bound for a note holding
-900 formulas. KaTeX adds about 270 kB of script and 256 kB of fonts; its
-stylesheet also lists woff and ttf copies of every font, which a small Vite
-plugin drops because every web view Margin runs in reads woff2.
-
-## Motion
-
-Every transition uses the timing tokens in `src/styles/tokens.css` and the
-keyframes in `src/styles/motion.css`. When the operating system asks for reduced
-motion, the durations collapse to zero and panels, menus, and dialogs change
-instantly.
-
-Two rules keep motion from fighting the editor. Note switches fade without
-moving, because CodeMirror measures positions from the live DOM. And widgets
-that change state, such as checkboxes and the selection toolbar, keep their DOM
-node so they animate instead of being rebuilt.
-
-## Status
-
-Early. It is usable for daily notes, but see `docs/research.md` for the roadmap
-(wiki links and backlinks, export). Images are linked by relative path, so
-moving a note to another folder breaks its image links for now; updating links
-on moves and renames is the next step.
+Margin is young but complete enough for daily notes. Next up: keeping image and
+note links working when notes are moved or renamed, wiki links and backlinks,
+and export to PDF and HTML.
 
 ## License
 
-MIT
+[MIT](LICENSE)
