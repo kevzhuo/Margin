@@ -136,6 +136,7 @@ export function EditorPane() {
     typewriter: () => useStore.getState().typewriter,
     smartTypography: () => useStore.getState().smartTypography,
     readingMode: () => useStore.getState().readingMode,
+    onTableMenu: (request) => useStore.setState({ tableMenu: request }),
   });
 
   const rememberView = (path: string | null) => {

@@ -16,6 +16,7 @@ import { typewriter } from "./typewriter";
 import { wrapSelectionOnType } from "./wrapSelection";
 import { smartTypography } from "./smartTypography";
 import { readingMode } from "./readingMode";
+import { tableEditing, type TableMenuRequest } from "./tableEdit";
 import { jumpFlash } from "./flash";
 import { marginFit } from "./marginFit";
 import { scrollerClicks } from "./scrollerClicks";
@@ -33,6 +34,8 @@ export interface EditorCallbacks {
   smartTypography?: () => boolean;
   /** Read when the editor state is created; change it later with setReadingMode. */
   readingMode?: () => boolean;
+  /** Shows the row and column menu for a right-click on a table. */
+  onTableMenu?: (request: TableMenuRequest) => void;
   /** Saves pasted, dropped or picked images; without it, images can't be added. */
   onImages?: ImageSaver;
 }
@@ -79,6 +82,7 @@ function editorExtensions(opts: Omit<CreateEditorOptions, "parent" | "doc">): Ex
       ]),
     ),
     formattingKeys,
+    tableEditing(opts.onTableMenu),
     keymap.of([...closeBracketsKeymap, ...markdownKeymap, ...findKeymap, indentWithTab, ...historyKeymap, ...defaultKeymap]),
     EditorView.contentAttributes.of({ spellcheck: "true", autocapitalize: "sentences", "aria-label": "Note editor" }),
     EditorView.domEventHandlers({

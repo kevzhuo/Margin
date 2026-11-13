@@ -1,6 +1,7 @@
 import { WidgetType, type EditorView } from "@codemirror/view";
 import { syntaxTree } from "@codemirror/language";
 import { renderInline } from "./inlineMarkdown";
+import { tableMenuHandler } from "./tableEdit";
 
 /** Replaces a bullet list marker (`-`, `*`, `+`). Same fixed width as the active-state mark. */
 export class BulletWidget extends WidgetType {
@@ -211,10 +212,19 @@ export class TableWidget extends WidgetType {
       wrap.style.setProperty("--li-depth", String(this.nest.list.depth));
     }
     const table = document.createElement("table");
-    const place = (cell: HTMLElement, data: TableCell) => {
+    const place = (cell: HTMLElement, data: TableCell, row: number, col: number) => {
       cell.append(renderInline(data.text));
       if (data.align) cell.style.textAlign = data.align;
+      // Right-click for the row and column menu (the app's, if it has one).
+      cell.addEventListener("contextmenu", (e) => {
+        const handler = view.state.facet(tableMenuHandler);
+        if (!handler || view.state.readOnly) return;
+        e.preventDefault();
+        handler({ x: e.clientX, y: e.clientY, pos: Math.min(view.posAtDOM(wrap) + data.offset, view.state.doc.length), cell: { row, col } });
+      });
       cell.addEventListener("mousedown", (e) => {
+        // A right-click opens the table menu instead (see contextmenu below).
+        if (e.button !== 0) return;
         e.preventDefault();
         const start = view.posAtDOM(wrap);
         const pos = Math.min(start + data.offset + data.text.length, view.state.doc.length);
@@ -224,19 +234,19 @@ export class TableWidget extends WidgetType {
     };
     const thead = document.createElement("thead");
     const tr = document.createElement("tr");
-    for (const c of this.data.header) {
+    for (const [col, c] of this.data.header.entries()) {
       const th = document.createElement("th");
-      place(th, c);
+      place(th, c, 0, col);
       tr.appendChild(th);
     }
     thead.appendChild(tr);
     table.appendChild(thead);
     const tbody = document.createElement("tbody");
-    for (const row of this.data.rows) {
+    for (const [index, row] of this.data.rows.entries()) {
       const r = document.createElement("tr");
-      for (const c of row) {
+      for (const [col, c] of row.entries()) {
         const td = document.createElement("td");
-        place(td, c);
+        place(td, c, index + 1, col);
         r.appendChild(td);
       }
       tbody.appendChild(r);

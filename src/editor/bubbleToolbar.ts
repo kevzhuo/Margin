@@ -5,6 +5,7 @@ import { StateEffect, StateField, type Extension } from "@codemirror/state";
 import { EditorView, showTooltip, ViewPlugin, type Command } from "@codemirror/view";
 import { headingLevelAt, insertLink, setHeading, toggleInline } from "./commands";
 import { focusedField } from "./livePreview";
+import { placeholderSelection } from "./placeholderSelection";
 
 const setDragging = StateEffect.define<boolean>();
 
@@ -83,12 +84,20 @@ const bubblePlugin = ViewPlugin.fromClass(
   },
 );
 
+const placeholderField = StateField.define<boolean>({
+  create: () => false,
+  update(value, tr) {
+    if (tr.annotation(placeholderSelection)) return true;
+    return tr.selection || tr.docChanged ? false : value;
+  },
+});
+
 // Tooltips are computed from state, so this reads the live preview's focus
 // field (which re-checks real focus) rather than the view. The toolbar stays
 // away while focus is elsewhere, such as in the find bar.
-const bubbleTooltip = showTooltip.compute([draggingField, focusedField, "selection", "doc"], (state) => {
+const bubbleTooltip = showTooltip.compute([draggingField, focusedField, placeholderField, "selection", "doc"], (state) => {
   const sel = state.selection.main;
-  if (sel.empty || state.field(draggingField) || !state.field(focusedField)) return null;
+  if (sel.empty || state.field(draggingField) || !state.field(focusedField) || state.field(placeholderField)) return null;
   const fromLine = state.doc.lineAt(sel.from).number;
   const toLine = state.doc.lineAt(sel.to).number;
   if (toLine - fromLine > 3) return null;
@@ -107,5 +116,5 @@ const bubbleTooltip = showTooltip.compute([draggingField, focusedField, "selecti
 
 /** The formatting toolbar over selected text. Needs livePreview() for its focus field. */
 export function bubbleToolbar(): Extension {
-  return [draggingField, bubblePlugin, bubbleTooltip];
+  return [draggingField, placeholderField, bubblePlugin, bubbleTooltip];
 }

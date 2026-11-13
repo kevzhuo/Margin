@@ -16,6 +16,7 @@ import {
   type WatchEvent,
 } from "../backend";
 import type { Heading } from "../editor/outline";
+import type { TableMenuRequest } from "../editor/tableEdit";
 import { fileNameFromTitle, isPlaceholderName, replaceTitle, titleFromDoc } from "./title";
 import { ATTACHMENTS_DIR, MAX_ATTACHMENT_BYTES, attachmentName, imageMarkdown, isImageFile, relativePath } from "./attachments";
 import { SORT_LABELS, touchFile, type SortBy } from "./treeSort";
@@ -222,6 +223,8 @@ export interface AppState {
   pdfPage: number;
   /** A page the viewer should scroll to; `seq` changes on every request. */
   pdfJump: { page: number; seq: number } | null;
+  /** The row and column menu for a right-clicked table, while it's open. */
+  tableMenu: TableMenuRequest | null;
   /** Whether each panel fits beside a comfortably wide editor right now. */
   sidebarFits: boolean;
   outlineFits: boolean;
@@ -544,6 +547,7 @@ export const useStore = create<AppState>((set, get) => {
     pdfOutline: [],
     pdfPage: 1,
     pdfJump: null,
+    tableMenu: null,
     sidebarFits: true,
     outlineFits: true,
     sidebarPeek: false,

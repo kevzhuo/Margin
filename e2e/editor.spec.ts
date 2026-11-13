@@ -220,3 +220,81 @@ test("word count updates while typing", async ({ page }) => {
   await page.keyboard.type("alpha beta gamma");
   await expect(count).toHaveText(`${before + 3} words`);
 });
+
+test("/table makes a table you can fill in by typing and Tab", async ({ page }) => {
+  await page.evaluate(async () => {
+    await window.__margin!.store.getState().createNote("/Demo Vault/Projects", "Prices");
+    const view = window.__margin!.store.getState().editor!;
+    view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: "# Prices\n\nSome text\n" }, selection: { anchor: "# Prices\n\nSome text".length } });
+    view.focus();
+  });
+  // Right after a line of text: the table makes room for itself.
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("/table");
+  const menu = page.locator(".cm-tooltip-autocomplete");
+  await expect(menu.locator("li[aria-selected]")).toContainText("Table");
+  await page.waitForTimeout(150); // CodeMirror's interactionDelay
+  await page.keyboard.press("Enter");
+  // The first column's name is selected to type over, without the formatting toolbar in the way.
+  await expect.poll(() => page.evaluate(() => { const v = window.__margin!.store.getState().editor!; const s = v.state.selection.main; return v.state.sliceDoc(s.from, s.to); })).toBe("Column 1");
+  await page.waitForTimeout(300);
+  await expect(page.locator(".cm-bubble-toolbar")).toHaveCount(0);
+  await page.keyboard.type("Fruit");
+  await page.keyboard.press("Tab");
+  await page.keyboard.type("Price");
+  await page.keyboard.press("Tab");
+  await page.keyboard.type("Notes");
+  await page.keyboard.press("Tab");
+  await page.keyboard.type("Apple");
+  await page.keyboard.press("Tab");
+  await page.keyboard.type("1.20");
+  const doc = await docText(page);
+  expect(doc).toContain("Some text\n\n| Fruit | Price | Notes |");
+  expect(doc).toMatch(/\| Apple +\| 1\.20 +\| +\|/);
+  // Away from the caret it renders as a table.
+  await page.evaluate(() => window.__margin!.store.getState().editor!.dispatch({ selection: { anchor: 0 } }));
+  await expect(page.locator(".cm-md-table th", { hasText: "Fruit" })).toBeVisible();
+});
+
+test("right-clicking a table adds and removes rows and columns, and aligns columns", async ({ page }) => {
+  const table = page.locator(".cm-md-table table");
+  await expect(table.locator("tbody tr")).toHaveCount(4);
+  // Rendered table: a body cell.
+  await table.locator("td", { hasText: "Heading" }).first().click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Insert row below" }).click();
+  await expect(table.locator("tbody tr")).toHaveCount(5);
+  // Still rendered: the caret didn't move into it.
+  await expect(page.locator(".cm-md-table-raw")).toHaveCount(0);
+
+  await table.locator("th", { hasText: "Widget" }).click({ button: "right" });
+  // The header row can't be deleted or have a row put above it.
+  await expect(page.getByRole("menuitem", { name: "Delete row" })).toHaveCount(0);
+  await expect(page.getByRole("menuitem", { name: "Insert row above" })).toHaveCount(0);
+  await page.getByRole("menuitem", { name: "Insert column right" }).click();
+  await expect(table.locator("th")).toHaveText(["Node", "Reveals when", "Widget", "Column 4"]);
+
+  await table.locator("th", { hasText: "Reveals when" }).click({ button: "right" });
+  await page.getByRole("menuitemradio", { name: "Align center" }).click();
+  await expect(table.locator("th").nth(1)).toHaveCSS("text-align", "center");
+  expect(await docText(page)).toMatch(/\| :-+: \|/);
+
+  await table.locator("th", { hasText: "Column 4" }).click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Delete column" }).click();
+  await expect(table.locator("th")).toHaveText(["Node", "Reveals when", "Widget"]);
+
+  await table.locator("td", { hasText: "Task item" }).click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Delete row" }).click();
+  await expect(table.locator("td", { hasText: "Task item" })).toHaveCount(0);
+
+  // While editing the source, the same menu works on the line clicked.
+  await table.locator("td", { hasText: "Heading" }).first().click();
+  await expect(page.locator(".cm-md-table-raw").first()).toBeVisible();
+  await lineWithText(page, "Table").click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Insert row above" }).click();
+  expect(await docText(page)).toMatch(/\| +\| +\| +\|\n\| Table/);
+
+  await lineWithText(page, "Table").click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Delete table" }).click();
+  await expect(page.locator(".cm-md-table, .cm-md-table-raw")).toHaveCount(0);
+  expect(await docText(page)).not.toContain("| Node");
+});

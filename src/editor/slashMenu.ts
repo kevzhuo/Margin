@@ -2,6 +2,7 @@ import { autocompletion, type Completion, type CompletionContext, type Completio
 import { EditorSelection } from "@codemirror/state";
 import type { EditorView } from "@codemirror/view";
 import { imageSaver, pickImages } from "./images";
+import { insertTable } from "./tableEdit";
 
 interface BlockItem {
   label: string;
@@ -27,7 +28,7 @@ export const BLOCK_ITEMS: BlockItem[] = [
   { label: "To-do list", detail: "Track tasks with checkboxes", keywords: "task todo checkbox", icon: svg('<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>'), template: "- [ ] |" },
   { label: "Quote", detail: "Capture a quotation", keywords: "blockquote citation", icon: svg('<path d="M6 17h3l2-4V7H5v6h3zM14 17h3l2-4V7h-6v6h3z"/>'), template: "> |" },
   { label: "Code block", detail: "Fenced code with highlighting", keywords: "code fence pre", icon: svg('<path d="M16 18l6-6-6-6M8 6l-6 6 6 6"/>'), template: "```|\n\n```" },
-  { label: "Table", detail: "Pipe table, edited in place", keywords: "table grid", icon: svg('<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M3 16h18M9 4v16"/>'), template: "| |  |\n| --- | --- |\n|  |  |" },
+  { label: "Table", detail: "Pipe table, edited in place", keywords: "table grid", icon: svg('<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M3 16h18M9 4v16"/>'), template: "", run: insertTable },
   { label: "Math", detail: "LaTeX equation, rendered as you type", keywords: "latex equation formula tex katex", icon: svg('<path d="M18 5H7l5 7-5 7h11"/>'), template: "$$\n|\n$$" },
   { label: "Divider", detail: "Horizontal rule", keywords: "hr rule line separator", icon: svg('<path d="M4 12h16"/>'), template: "---\n|" },
   {

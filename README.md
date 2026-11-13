@@ -51,6 +51,10 @@ and Linux too.
   toolbar, or type `*`, `` ` `` or `$` over a selection to wrap it.
 - **Smart typography:** “curly quotes”, em dashes from `--` and ellipses from
   `...` as you type (never inside code or maths, and one ⌘Z away from undoing).
+- **Tables you can fill in:** `/table` makes one with its first column name
+  ready to type over; Tab moves to the next cell (and adds a row at the end).
+  Right-click any table to add or remove rows and columns, align a column, or
+  delete it. The source stays neatly lined up.
 - **Find and replace** in the note, with case, whole-word and regex options.
 
 ### Images
