@@ -8,7 +8,8 @@
 //! write_note(path, content)  -> void       (atomic: temp file + rename)
 //! create_note(dir, name)     -> string     (new absolute path)
 //! create_folder(dir, name)   -> string     (new absolute path)
-//! search_vault(query, limit) -> SearchHit[]
+//! search_vault(query, limit) -> SearchHit[] (notes only)
+//! list_images()              -> ImageFile[] (every image in the vault)
 //! rename_path(from, to)      -> void
 //! delete_path(path)          -> void       (moves to the system trash)
 //! watch_vault(root)          -> void       (emits "vault://changed")
