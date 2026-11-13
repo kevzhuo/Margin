@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import { isTauri, platform } from "./backend";
+import { Suspense, lazy, useEffect, useRef, useState } from "react";
+import { isPdf, isTauri, platform } from "./backend";
 import { EditorPane } from "./components/EditorPane";
 import { EmptyState } from "./components/EmptyState";
 import { OutlinePanel } from "./components/OutlinePanel";
@@ -16,6 +16,9 @@ import { appCommands, matchesShortcut } from "./state/appCommands";
 import { prefersReducedMotion } from "./components/usePresence";
 import { connectMenu } from "./state/menuBridge";
 import { SwipeNavigation } from "./components/SwipeNavigation";
+
+// pdf.js is large: it loads the first time a PDF is opened.
+const PdfView = lazy(() => import("./components/PdfView"));
 
 const MEASURE = { narrow: "600px", medium: "720px", wide: "900px" } as const;
 const FONT_VAR = { sans: "var(--font-editor-sans)", serif: "var(--font-editor-serif)", mono: "var(--font-editor-mono)" } as const;
@@ -268,7 +271,17 @@ export default function App() {
       </div>
       <main className="main">
         <TopBar />
-        {activePath ? <EditorPane /> : <EmptyState />}
+        {activePath ? (
+          isPdf(activePath) ? (
+            <Suspense fallback={<div className="pdf-view" />}>
+              <PdfView />
+            </Suspense>
+          ) : (
+            <EditorPane />
+          )
+        ) : (
+          <EmptyState />
+        )}
         <StatusBar />
         <SwipeNavigation />
       </main>

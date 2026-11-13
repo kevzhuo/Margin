@@ -1094,6 +1094,148 @@ html.titlebar-overlay .outline {
   box-shadow: inset 0 0 0 1px var(--border);
 }
 
+/* ---------- PDF viewer ---------- */
+.pdf-view {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--fence-bg);
+}
+.pdf-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  outline: none;
+}
+/* Wider than the window when zoomed in, so the whole page can be scrolled to. */
+.pdf-pages {
+  width: max-content;
+  min-width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(var(--gutter) / 2);
+  padding: var(--gutter) var(--gutter) 72px;
+  box-sizing: border-box;
+}
+.pdf-page {
+  position: relative;
+  flex: none;
+  background: #fff;
+  border-radius: 2px;
+  box-shadow:
+    0 0 0 1px rgba(15, 15, 15, 0.06),
+    0 2px 8px rgba(15, 15, 15, 0.08);
+  overflow: hidden;
+}
+:root[data-theme="dark"] .pdf-page {
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.08),
+    0 2px 10px rgba(0, 0, 0, 0.5);
+}
+.pdf-page canvas {
+  display: block;
+}
+.pdf-message {
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--text-2);
+  text-align: center;
+}
+.pdf-message .button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.pdf-controls {
+  position: absolute;
+  right: 16px;
+  bottom: 10px;
+  z-index: 2;
+  align-items: center;
+  font-size: 12px;
+  color: var(--text-3);
+}
+.pdf-page-number {
+  font-variant-numeric: tabular-nums;
+}
+.pdf-zoom {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.pdf-zoom .icon-button {
+  font-size: 15px;
+  line-height: 1;
+}
+.pdf-zoom-level {
+  min-width: 42px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-2);
+}
+.pdf-zoom-level:hover {
+  color: var(--text);
+}
+
+/* pdf.js's text layer: invisible text over the drawn page, so it can be
+   selected and copied. Adapted from pdf.js's own viewer stylesheet. */
+.textLayer {
+  position: absolute;
+  inset: 0;
+  overflow: clip;
+  line-height: 1;
+  text-align: initial;
+  -webkit-text-size-adjust: none;
+  text-size-adjust: none;
+  forced-color-adjust: none;
+  transform-origin: 0 0;
+  z-index: 0;
+  --min-font-size: 1;
+  --text-scale-factor: calc(var(--total-scale-factor) * var(--min-font-size));
+  --min-font-size-inv: calc(1 / var(--min-font-size));
+}
+.textLayer span,
+.textLayer br {
+  color: transparent;
+  position: absolute;
+  white-space: pre;
+  cursor: text;
+  transform-origin: 0% 0%;
+  user-select: text;
+  -webkit-user-select: text;
+}
+.textLayer > :not(.markedContent),
+.textLayer .markedContent span:not(.markedContent) {
+  z-index: 1;
+  --font-height: 0;
+  font-size: calc(var(--text-scale-factor) * var(--font-height));
+  --scale-x: 1;
+  --rotate: 0deg;
+  transform: rotate(var(--rotate)) scaleX(var(--scale-x)) scale(var(--min-font-size-inv));
+}
+.textLayer .markedContent {
+  display: contents;
+}
+.textLayer ::selection {
+  background: rgba(35, 131, 226, 0.3);
+}
+.textLayer br::selection {
+  background: transparent;
+}
+.textLayer .endOfContent {
+  display: block;
+  position: absolute;
+  inset: 100% 0 0;
+  z-index: 0;
+  cursor: default;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
 /* ---------- Attachments ---------- */
 .attachments {
   width: min(760px, calc(100vw - 32px));

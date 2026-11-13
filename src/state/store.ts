@@ -5,6 +5,8 @@ import {
   dirname,
   flattenFiles,
   getBackend,
+  isMarkdown,
+  isPdf,
   isWithin,
   joinPath,
   stripExtension,
@@ -203,6 +205,8 @@ export interface AppState {
   typewriter: boolean;
   /** The note reads as a finished page and can't be edited. Not remembered between launches. */
   readingMode: boolean;
+  /** PDF zoom, where 1 fits the page to the window's width. */
+  pdfZoom: number;
   /** Whether each panel fits beside a comfortably wide editor right now. */
   sidebarFits: boolean;
   outlineFits: boolean;
@@ -286,6 +290,8 @@ export interface AppState {
   setSmartTypography(on: boolean): void;
   setSortBy(by: SortBy): void;
   setReadingMode(on: boolean): void;
+  /** Step the PDF zoom in or out, or back to fitting the width (0). */
+  zoomPdf(direction: -1 | 0 | 1): void;
   setTitleSync(on: boolean): void;
   setFits(sidebarFits: boolean, outlineFits: boolean): void;
   closePeeks(): void;
@@ -340,6 +346,8 @@ function serially<T>(op: () => Promise<T>): Promise<T> {
 }
 
 export const SAVE_DELAY_MS = 500;
+/** PDF zoom levels, as fractions of the fit-to-width size. */
+export const PDF_ZOOM_STEPS = [0.5, 0.67, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, 3];
 /** How many vaults the welcome screen remembers. */
 export const RECENT_VAULTS_MAX = 6;
 /** Wait for a pause in typing before renaming a note after its title. */
@@ -431,10 +439,11 @@ export const useStore = create<AppState>((set, get) => {
     if (titleTimer) await get().syncTitle();
     await get().flushSave();
     try {
-      const content = await backend.readNote(path);
+      // A PDF has no text to edit or save: the viewer loads the file itself.
+      const content = isPdf(path) ? null : await backend.readNote(path);
       latestDoc = content;
       savedDoc = content;
-      syncedTitle = titleFromDoc(content);
+      syncedTitle = content === null ? null : titleFromDoc(content);
       set((s) => ({
         activePath: path,
         content,
@@ -443,6 +452,8 @@ export const useStore = create<AppState>((set, get) => {
         saveState: "idle",
         renaming: s.renaming === path ? path : null,
         selectionWords: 0,
+        // The editor fills these in for a note; a PDF has none.
+        ...(content === null ? { headings: [], currentHeading: null, wordCount: 0 } : {}),
         recent: [path, ...s.recent.filter((p) => p !== path)].slice(0, RECENT_MAX),
       }));
       persist();
@@ -505,6 +516,7 @@ export const useStore = create<AppState>((set, get) => {
     saveState: "idle",
     ...initialSettings(settings),
     readingMode: false,
+    pdfZoom: 1,
     sidebarFits: true,
     outlineFits: true,
     sidebarPeek: false,
@@ -553,7 +565,7 @@ export const useStore = create<AppState>((set, get) => {
         if (!activePath && preferred && exists.has(preferred)) {
           await get().openNote(preferred);
         } else if (!activePath && files.length) {
-          await get().openNote(files[0].path);
+          await get().openNote((files.find((f) => isMarkdown(f.name)) ?? files[0]).path);
         }
         set({ ready: true });
       })();
@@ -790,8 +802,10 @@ export const useStore = create<AppState>((set, get) => {
         set({ renaming: null });
         return;
       }
-      const isFile = /\.(md|markdown)$/i.test(basename(path));
-      const finalName = isFile && !/\.(md|markdown)$/i.test(clean) ? `${clean}.md` : clean;
+      // A note or PDF keeps its kind of file when renamed without an extension.
+      const isNote = isMarkdown(basename(path));
+      const pdf = isPdf(basename(path));
+      const finalName = isNote && !isMarkdown(clean) ? `${clean}.md` : pdf && !isPdf(clean) ? `${clean}.pdf` : clean;
       const to = joinPath(dirname(path), finalName);
       if (to === path) {
         set({ renaming: null });
@@ -805,7 +819,7 @@ export const useStore = create<AppState>((set, get) => {
         });
         await get().refreshTree();
         set({ renaming: null });
-        if (isFile && get().titleSync && opts.updateHeading !== false) {
+        if (isNote && get().titleSync && opts.updateHeading !== false) {
           await retitle(to, stripExtension(basename(path)), stripExtension(basename(to)));
         }
       } catch (e) {
@@ -916,6 +930,11 @@ export const useStore = create<AppState>((set, get) => {
     async syncFromDisk() {
       const { backend, activePath } = get();
       if (!backend || !activePath) return;
+      // A PDF changed by another app: the viewer reloads it.
+      if (isPdf(activePath)) {
+        set((s) => ({ contentVersion: s.contentVersion + 1 }));
+        return;
+      }
       let content: string;
       try {
         content = await backend.readNote(activePath);
@@ -1031,6 +1050,18 @@ export const useStore = create<AppState>((set, get) => {
       set({ readingMode });
     },
 
+    zoomPdf(direction) {
+      const steps = PDF_ZOOM_STEPS;
+      const current = get().pdfZoom;
+      const next =
+        direction === 0
+          ? 1
+          : direction > 0
+            ? (steps.find((z) => z > current + 0.001) ?? steps[steps.length - 1])
+            : ([...steps].reverse().find((z) => z < current - 0.001) ?? steps[0]);
+      set({ pdfZoom: next });
+    },
+
     setTitleSync(titleSync) {
       set({ titleSync });
       persist();
@@ -1071,7 +1102,11 @@ export const useStore = create<AppState>((set, get) => {
       // A note that can't be read fails the whole scan rather than make its images look unused.
       const [images, notes] = await Promise.all([
         backend.listImages(vaultRoot),
-        Promise.all(flattenFiles(get().tree).map(async (f) => ({ path: f.path, text: await backend.readNote(f.path) }))),
+        Promise.all(
+          flattenFiles(get().tree)
+            .filter((f) => isMarkdown(f.name))
+            .map(async (f) => ({ path: f.path, text: await backend.readNote(f.path) })),
+        ),
       ]);
       return { images, usage: imageUsage(vaultRoot, images, notes) };
     },

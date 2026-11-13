@@ -1,3 +1,4 @@
+import { isPdf } from "../backend";
 import { canGoBack, canGoForward, crumbsFor, outlineVisible, sidebarVisible, useStore } from "../state/store";
 import { formatShortcut } from "../state/appCommands";
 import { ArrowsHorizontal, ArrowsInward, BookOpen, ChevronLeft, ChevronRightLg, FileText, PanelLeft, PanelRight } from "./icons";
@@ -18,6 +19,7 @@ export function TopBar() {
   const goBack = useStore((s) => s.goBack);
   const goForward = useStore((s) => s.goForward);
   const crumbs = crumbsFor(vaultRoot, activePath);
+  const note = !!activePath && !isPdf(activePath);
 
   // Before a vault is open the bar is only a place to drag the window by.
   if (!vaultRoot) return <div className="topbar" data-tauri-drag-region="" />;
@@ -59,7 +61,8 @@ export function TopBar() {
         )}
       </nav>
       <div className="topbar-actions">
-        {activePath && (
+        {/* Reading mode and page width are for notes; a PDF has its own zoom. */}
+        {note && (
           <button
             className={`icon-button reading-toggle${readingMode ? " on" : ""}`}
             onClick={() => setReadingMode(!readingMode)}
@@ -71,15 +74,17 @@ export function TopBar() {
             {readingMode && <span className="reading-label">Reading</span>}
           </button>
         )}
-        <button
-          className={`icon-button${fullWidth ? " on" : ""}`}
-          onClick={() => setFullWidth(!fullWidth)}
-          aria-label="Full width"
-          aria-pressed={fullWidth}
-          title={fullWidth ? "Use page margins" : "Use full width"}
-        >
-          {fullWidth ? <ArrowsInward /> : <ArrowsHorizontal />}
-        </button>
+        {note && (
+          <button
+            className={`icon-button${fullWidth ? " on" : ""}`}
+            onClick={() => setFullWidth(!fullWidth)}
+            aria-label="Full width"
+            aria-pressed={fullWidth}
+            title={fullWidth ? "Use page margins" : "Use full width"}
+          >
+            {fullWidth ? <ArrowsInward /> : <ArrowsHorizontal />}
+          </button>
+        )}
         <button
           className={`icon-button panel-toggle${outlineOpen ? " on" : ""}`}
           onClick={toggleOutline}

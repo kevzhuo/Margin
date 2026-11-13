@@ -662,6 +662,56 @@ describe("attachments", () => {
   });
 });
 
+describe("PDFs", () => {
+  const pdf = new Uint8Array([37, 80, 68, 70]);
+
+  it("lists PDFs and opens one without reading it as text, clearing the note's outline", async () => {
+    const store = await fresh();
+    const path = await backend.saveAttachment(`${R}/Reading`, "Paper.pdf", pdf);
+    await store.getState().refreshTree();
+    expect(flattenFiles(store.getState().tree).map((f) => f.name)).toContain("Paper.pdf");
+    await store.getState().openNote(path);
+    expect(store.getState()).toMatchObject({ activePath: path, content: null, headings: [], wordCount: 0, dirty: false });
+    // Nothing to save, and nothing written over the PDF.
+    await store.getState().flushSave();
+    expect(backend.writes).toEqual([]);
+  });
+
+  it("keeps .pdf when renamed without it, and reloads when another app changes it", async () => {
+    const store = await fresh();
+    const path = await backend.saveAttachment(`${R}/Reading`, "Paper.pdf", pdf);
+    await store.getState().refreshTree();
+    await store.getState().openNote(path);
+    await store.getState().renamePath(path, "Renamed");
+    expect(store.getState().activePath).toBe(`${R}/Reading/Renamed.pdf`);
+    const before = store.getState().contentVersion;
+    backend.fire({ kind: "modify", paths: [`${R}/Reading/Renamed.pdf`] });
+    await vi.advanceTimersByTimeAsync(10);
+    expect(store.getState().contentVersion).toBe(before + 1);
+    expect(store.getState().toasts).toEqual([]);
+  });
+
+  it("steps the zoom through its levels and back to fitting the width", async () => {
+    const store = await fresh();
+    store.getState().zoomPdf(1);
+    expect(store.getState().pdfZoom).toBe(1.1);
+    store.getState().zoomPdf(-1);
+    store.getState().zoomPdf(-1);
+    expect(store.getState().pdfZoom).toBe(0.9);
+    for (let i = 0; i < 20; i++) store.getState().zoomPdf(-1);
+    expect(store.getState().pdfZoom).toBe(mod.PDF_ZOOM_STEPS[0]);
+    store.getState().zoomPdf(0);
+    expect(store.getState().pdfZoom).toBe(1);
+  });
+
+  it("leaves PDFs out when working out which images are used", async () => {
+    const store = await fresh();
+    await backend.saveAttachment(`${R}/Reading`, "Paper.pdf", pdf);
+    await store.getState().refreshTree();
+    await expect(store.getState().scanAttachments()).resolves.toBeTruthy();
+  });
+});
+
 describe("vaults on the welcome screen", () => {
   it("remembers opened vaults, most recent first, without repeats", async () => {
     const store = await fresh();

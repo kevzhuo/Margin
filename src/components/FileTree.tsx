@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent, type MouseEvent } from "react";
-import { dirname, fileManagerLabel, isWithin, stripExtension, type FileNode } from "../backend";
+import { dirname, fileManagerLabel, isPdf, isWithin, stripExtension, type FileNode } from "../backend";
 import { useStore } from "../state/store";
 import { sortTree } from "../state/treeSort";
 import { confirmAndDelete, formatShortcut } from "../state/appCommands";
-import { ChevronRight, Folder } from "./icons";
+import { ChevronRight, FilePdf, Folder } from "./icons";
 import { ContextMenu, type MenuItem } from "./ContextMenu";
 
 interface MenuState {
@@ -141,7 +141,10 @@ function Row({ node, depth, onMenu, dropTarget, onDragStart }: RowProps) {
             <Folder className="tree-icon" />
           </>
         ) : (
-          <span className="tree-chevron" aria-hidden="true" />
+          <>
+            <span className="tree-chevron" aria-hidden="true" />
+            {isPdf(node.name) && <FilePdf className="tree-icon" />}
+          </>
         )}
         {isRenaming ? <RenameInput node={node} onDone={onDone} /> : <span className="tree-name">{isDir ? node.name : stripExtension(node.name)}</span>}
       </Tag>

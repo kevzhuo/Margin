@@ -66,6 +66,17 @@ protocol starts with an empty scope and each vault is allowed when it is opened.
 A file dropped anywhere the editor doesn't take it is refused, so a stray drop
 can't replace the app with the file.
 
+## PDFs
+
+The file tree lists `.pdf` files beside notes. Opening one shows
+`src/components/PdfView.tsx` instead of the editor: it renders pages with
+pdf.js (the legacy build, for older WebKit), drawing each page on a canvas at
+the screen's resolution only while it is near the window, with pdf.js's text
+layer on top for selection. The pdf.js code loads only when a PDF is first
+opened, and its data files (character maps, standard fonts, image decoders)
+are copied into the app by a small Vite plugin, so PDFs render offline. PDFs
+are never read as text: search, title sync and the attachments scan skip them.
+
 ## Saving and syncing
 
 Every save writes a temporary file next to the note and renames it over the

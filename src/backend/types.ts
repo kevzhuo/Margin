@@ -70,7 +70,7 @@ export interface VaultBackend {
    */
   createVault(): Promise<string | null>;
 
-  /** Recursively list the vault. Hidden entries and non-Markdown files are omitted. */
+  /** Recursively list the vault: folders, notes and PDFs. Hidden entries and other files are omitted. */
   listTree(root: string): Promise<FileNode[]>;
 
   readNote(path: string): Promise<string>;
@@ -142,6 +142,11 @@ export function joinPath(dir: string, name: string): string {
 
 export function isMarkdown(name: string): boolean {
   return /\.(md|markdown)$/i.test(name);
+}
+
+/** PDFs are listed beside notes and open in Margin's viewer instead of the editor. */
+export function isPdf(name: string): boolean {
+  return /\.pdf$/i.test(name);
 }
 
 /** Depth-first flatten of a tree, files only. */

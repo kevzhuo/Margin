@@ -6,6 +6,7 @@ import {
   flattenFiles,
   headingText,
   isMarkdown,
+  isPdf,
   isWithin,
   joinPath,
   SEARCH_LINE_MAX,
@@ -269,6 +270,9 @@ export class MemoryBackend implements VaultBackend {
       if (!path.startsWith(prefix) || !isMarkdown(path)) continue;
       ensureDir(dirname(path)).push({ name: basename(path), path, kind: "file", ...this.times[path] });
     }
+    for (const [path, { modified }] of this.assets) {
+      if (path.startsWith(prefix) && isPdf(path)) ensureDir(dirname(path)).push({ name: basename(path), path, kind: "file", modified, created: modified });
+    }
 
     const sort = (list: FileNode[]) => {
       list.sort((a, b) =>
@@ -322,14 +326,18 @@ export class MemoryBackend implements VaultBackend {
   }
 
   async renamePath(from: string, to: string): Promise<void> {
-    if (this.files[to] !== undefined || this.dirExists(to)) throw new Error(`Already exists: ${to}`);
+    if (this.files[to] !== undefined || this.assets.has(to) || this.dirExists(to)) throw new Error(`Already exists: ${to}`);
     if (to !== from && isWithin(to, from)) throw new Error("Cannot move a folder into itself");
     // A move keeps a file's times, as it does on disk.
     const moveTimes = (a: string, b: string) => {
       if (this.times[a]) this.times[b] = this.times[a];
       delete this.times[a];
     };
-    if (this.files[from] !== undefined) {
+    const asset = this.assets.get(from);
+    if (asset) {
+      this.assets.delete(from);
+      this.assets.set(to, asset);
+    } else if (this.files[from] !== undefined) {
       this.files[to] = this.files[from];
       delete this.files[from];
       moveTimes(from, to);

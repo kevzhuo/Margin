@@ -170,3 +170,10 @@ export const Trash = ({ size = 16, ...p }: IconProps) => (
     <path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3" />
   </svg>
 );
+export const FilePdf = ({ size = 16, ...p }: IconProps) => (
+  <svg {...base(size, p)} strokeWidth={1.7}>
+    <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
+    <path d="M14 3v5h5" />
+    <path d="M8.5 16.5h7M8.5 13h4" />
+  </svg>
+);

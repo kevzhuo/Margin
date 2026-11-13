@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef, type CSSProperties } from "react";
+import { isPdf } from "../backend";
 import { useStore } from "../state/store";
 import { selectAt } from "../editor/commands";
 
@@ -28,7 +29,7 @@ export function OutlinePanel() {
     <aside className="outline" aria-label="Outline">
       <div className="section-label">Outline</div>
       {!activePath || shown.length === 0 ? (
-        <div className="outline-empty">No headings</div>
+        <div className="outline-empty">{activePath && isPdf(activePath) ? "PDFs have no outline here" : "No headings"}</div>
       ) : (
         <div className="outline-list" ref={list}>
           {/* One highlight that slides between items instead of jumping. */}

@@ -67,6 +67,13 @@ go to the Trash, so nothing is lost by accident).
   <img src="docs/images/attachments.png" width="760" alt="The Attachments window: four images, two in use by a note and two marked as not used in any note, with a Clean up unused button">
 </p>
 
+### PDFs
+
+PDFs in your vault folder show up in the sidebar next to your notes. Click one
+to read it in Margin's own viewer, with page numbers, zoom (⌘+ and ⌘−) and text
+you can select and copy. Margin remembers where you were in each PDF and
+reloads it if the file changes. It never edits your PDFs.
+
 ### Finding your way
 
 - **Quick switcher and full-text search** (⌘P): jump to a note by name, or to

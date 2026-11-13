@@ -1,3 +1,4 @@
+import { isPdf } from "../backend";
 import { useStore } from "../state/store";
 
 /** Average adult silent-reading speed, words per minute. */
@@ -9,7 +10,8 @@ export function StatusBar() {
   const dirty = useStore((s) => s.dirty);
   const saveState = useStore((s) => s.saveState);
   const activePath = useStore((s) => s.activePath);
-  if (!activePath) return null;
+  // A PDF shows its own page number and zoom instead.
+  if (!activePath || isPdf(activePath)) return null;
   const status = saveState === "error" ? "Save failed" : dirty || saveState === "saving" ? "Saving…" : "";
   // A note you can read in under a minute doesn't need a reading time.
   const minutes = wordCount >= READING_WPM ? Math.round(wordCount / READING_WPM) : 0;

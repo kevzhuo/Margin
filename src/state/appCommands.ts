@@ -1,5 +1,5 @@
 import { openSearchPanel } from "@codemirror/search";
-import { basename, dirname, platform, stripExtension } from "../backend";
+import { basename, dirname, isPdf, platform, stripExtension } from "../backend";
 import { useStore, type FontFamily, type LineWidth, type ThemePref } from "./store";
 import { SORT_LABELS, type SortBy } from "./treeSort";
 
@@ -95,6 +95,7 @@ const fileManager = () => (isMac() ? "Finder" : platform() === "windows" ? "Expl
 export function appCommands(): AppCommand[] {
   const s = useStore.getState();
   const hasNote = () => !!useStore.getState().activePath;
+  const pdfOpen = () => isPdf(useStore.getState().activePath ?? "");
   const hasVault = () => !!useStore.getState().vaultRoot;
   const theme = (t: ThemePref, label: string): AppCommand => ({
     id: `theme.${t}`,
@@ -186,7 +187,7 @@ export function appCommands(): AppCommand[] {
       keywords: "read only preview review hide markdown syntax",
       keys: "Mod+Shift+E",
       global: true,
-      enabled: hasNote,
+      enabled: () => hasNote() && !pdfOpen(),
       run: () => useStore.getState().setReadingMode(!useStore.getState().readingMode),
     },
     {
@@ -223,9 +224,29 @@ export function appCommands(): AppCommand[] {
       keywords: "typography curly quotes em dash ellipsis punctuation autocorrect",
       run: () => useStore.getState().setSmartTypography(!useStore.getState().smartTypography),
     },
-    { id: "text.bigger", title: "Increase text size", keywords: "zoom in font larger", keys: "Mod+=", global: true, run: () => useStore.getState().bumpFontSize(1) },
-    { id: "text.smaller", title: "Decrease text size", keywords: "zoom out font smaller", keys: "Mod+-", global: true, run: () => useStore.getState().bumpFontSize(-1) },
-    { id: "text.reset", title: "Reset text size", keywords: "zoom actual size font", run: () => useStore.getState().setFontSize(16) },
+    // With a PDF open, the text size shortcuts zoom the PDF instead.
+    {
+      id: "text.bigger",
+      title: "Increase text size",
+      keywords: "zoom in font larger pdf",
+      keys: "Mod+=",
+      global: true,
+      run: () => (pdfOpen() ? useStore.getState().zoomPdf(1) : useStore.getState().bumpFontSize(1)),
+    },
+    {
+      id: "text.smaller",
+      title: "Decrease text size",
+      keywords: "zoom out font smaller pdf",
+      keys: "Mod+-",
+      global: true,
+      run: () => (pdfOpen() ? useStore.getState().zoomPdf(-1) : useStore.getState().bumpFontSize(-1)),
+    },
+    {
+      id: "text.reset",
+      title: "Reset text size",
+      keywords: "zoom actual size font fit pdf",
+      run: () => (pdfOpen() ? useStore.getState().zoomPdf(0) : useStore.getState().setFontSize(16)),
+    },
     width("narrow", "Narrow"),
     width("medium", "Medium"),
     width("wide", "Wide"),

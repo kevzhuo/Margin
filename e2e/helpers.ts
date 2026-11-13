@@ -64,3 +64,46 @@ export function lineWithText(page: Page, text: string): Locator {
 export function lastLine(page: Page): Locator {
   return page.locator(".cm-line").last();
 }
+
+/**
+ * A small, valid PDF with one line of Helvetica text on each page, built by
+ * hand so tests need no files. Pages are US Letter.
+ */
+export function makePdf(pages: string[]): number[] {
+  const objects: string[] = [];
+  const font = 3 + pages.length * 2;
+  const kids = pages.map((_, i) => `${3 + i * 2} 0 R`).join(" ");
+  objects.push("<< /Type /Catalog /Pages 2 0 R >>");
+  objects.push(`<< /Type /Pages /Kids [${kids}] /Count ${pages.length} >>`);
+  pages.forEach((text, i) => {
+    const stream = `BT /F1 28 Tf 72 680 Td (${text.replace(/[()\\]/g, "\\$&")}) Tj ET`;
+    objects.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 ${font} 0 R >> >> /Contents ${4 + i * 2} 0 R >>`);
+    objects.push(`<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`);
+  });
+  objects.push("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>");
+  let out = "%PDF-1.4\n";
+  const offsets: number[] = [];
+  objects.forEach((body, i) => {
+    offsets.push(out.length);
+    out += `${i + 1} 0 obj\n${body}\nendobj\n`;
+  });
+  const xref = out.length;
+  out += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  for (const o of offsets) out += `${String(o).padStart(10, "0")} 00000 n \n`;
+  out += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+  return [...out].map((c) => c.charCodeAt(0));
+}
+
+/** Put a PDF into the demo vault, as if it had been copied into the folder. */
+export async function addPdf(page: Page, dir: string, name: string, pages: string[]) {
+  const bytes = makePdf(pages);
+  return page.evaluate(
+    async ({ dir, name, bytes }) => {
+      const st = window.__margin!.store.getState();
+      const path = await st.backend!.saveAttachment(dir, name, new Uint8Array(bytes));
+      await st.refreshTree();
+      return path;
+    },
+    { dir, name, bytes },
+  );
+}

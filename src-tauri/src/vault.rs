@@ -219,6 +219,16 @@ fn is_markdown(name: &str) -> bool {
     lower.ends_with(".md") || lower.ends_with(".markdown")
 }
 
+/// PDFs are listed beside notes and open in Margin's viewer; they are never read as text.
+fn is_pdf(name: &str) -> bool {
+    name.to_ascii_lowercase().ends_with(".pdf")
+}
+
+/// Files the sidebar lists: notes and PDFs.
+fn is_listed(name: &str) -> bool {
+    is_markdown(name) || is_pdf(name)
+}
+
 fn is_hidden_name(name: &str) -> bool {
     name.starts_with('.') || name == "node_modules"
 }
@@ -288,8 +298,8 @@ fn sort_nodes(nodes: &mut [FileNode]) {
     });
 }
 
-/// Recursively list a folder: directories and Markdown files only, hidden
-/// entries and `node_modules` skipped, directories first, natural order.
+/// Recursively list a folder: directories, notes and PDFs, hidden entries and
+/// `node_modules` skipped, directories first, natural order.
 pub fn list_tree_at(dir: &Path) -> Result<Vec<FileNode>, String> {
     let entries = fs::read_dir(dir).map_err(|e| io_err("Could not read folder", e))?;
     let mut nodes = Vec::new();
@@ -320,7 +330,7 @@ pub fn list_tree_at(dir: &Path) -> Result<Vec<FileNode>, String> {
                 modified,
                 created,
             });
-        } else if file_type.is_file() && is_markdown(&name) {
+        } else if file_type.is_file() && is_listed(&name) {
             nodes.push(FileNode {
                 name,
                 path: display_path(&path),
@@ -556,11 +566,13 @@ pub fn create_folder_in(dir: &Path, name: &str) -> Result<PathBuf, String> {
     Ok(candidate)
 }
 
-fn collect_files(nodes: &[FileNode], out: &mut Vec<String>) {
+/// The notes in a tree (PDFs and folders left out), depth first.
+fn collect_notes(nodes: &[FileNode], out: &mut Vec<String>) {
     for n in nodes {
         match &n.children {
-            Some(children) => collect_files(children, out),
-            None => out.push(n.path.clone()),
+            Some(children) => collect_notes(children, out),
+            None if is_markdown(&n.name) => out.push(n.path.clone()),
+            None => {}
         }
     }
 }
@@ -573,7 +585,7 @@ pub fn search_dir(root: &Path, query: &str, limit: usize) -> Result<Vec<SearchHi
         return Ok(Vec::new());
     }
     let mut files = Vec::new();
-    collect_files(&list_tree_at(root)?, &mut files);
+    collect_notes(&list_tree_at(root)?, &mut files);
     let mut hits = Vec::new();
     for path in files {
         let too_big = fs::metadata(&path)
@@ -730,7 +742,7 @@ fn watch_path_relevant(root: &Path, path: &Path) -> bool {
     // so judge by name when we cannot stat it.
     match path.file_name().map(|n| n.to_string_lossy().into_owned()) {
         Some(name) => {
-            path.is_dir() || is_markdown(&name) || (!path.exists() && !name.contains('.'))
+            path.is_dir() || is_listed(&name) || (!path.exists() && !name.contains('.'))
         }
         None => false,
     }
@@ -1017,6 +1029,7 @@ mod tests {
         fs::write(root.join("Projects/Note 10.md"), "ten").unwrap();
         fs::write(root.join("Projects/Note 2.md"), "two").unwrap();
         fs::write(root.join("Projects/image.png"), "x").unwrap();
+        fs::write(root.join("Projects/Paper.PDF"), "%PDF").unwrap();
         fs::write(root.join("Inbox.md"), "inbox").unwrap();
         fs::write(root.join("alpha.markdown"), "a").unwrap();
         fs::write(root.join(".hidden.md"), "h").unwrap();
@@ -1027,7 +1040,7 @@ mod tests {
         assert_eq!(projects.kind, "dir");
         assert_eq!(
             names(projects.children.as_ref().unwrap()),
-            vec!["Note 2.md", "Note 10.md"]
+            vec!["Note 2.md", "Note 10.md", "Paper.PDF"]
         );
         for n in &tree {
             assert!(Path::new(&n.path).is_absolute());
@@ -1069,6 +1082,7 @@ mod tests {
         )
         .unwrap();
         fs::write(root.join("B/skip.txt"), "typora in a text file").unwrap();
+        fs::write(root.join("B/paper.pdf"), "typora in a PDF").unwrap();
         fs::write(root.join(".hidden.md"), "typora hidden").unwrap();
 
         let hits = search_dir(root, "Typora", 100).unwrap();
