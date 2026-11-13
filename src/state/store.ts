@@ -270,8 +270,11 @@ export interface AppState {
   goForward(): Promise<void>;
   updateContent(doc: string): void;
   flushSave(): Promise<void>;
-  /** With a name, the note is created under that name; without one it starts as "Untitled" in rename mode. */
-  /** Create a note in `dir`, or by default in the open note's folder (the vault's top level if none is open). */
+  /**
+   * Create a note in `dir`, or by default in the open note's folder (the
+   * vault's top level if none is open). With a name, the note is created under
+   * that name; without one it is "Untitled" until you name it.
+   */
   createNote(dir?: string, name?: string): Promise<string | null>;
   createFolder(dir?: string): Promise<string | null>;
   /**
@@ -319,7 +322,6 @@ export interface AppState {
   setTypewriter(on: boolean): void;
   openPalette(seed?: string): void;
   closePalette(): void;
-  /** Kept for the existing keyboard shortcut and tests. */
   setSettingsOpen(open: boolean): void;
   setAttachmentsOpen(open: boolean): void;
   /** List the vault's images and find which notes use each (the open note as it is now). */

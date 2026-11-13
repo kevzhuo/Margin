@@ -289,11 +289,14 @@ test("right-clicking a table adds and removes rows and columns, and aligns colum
   // While editing the source, the same menu works on the line clicked.
   await table.locator("td", { hasText: "Heading" }).first().click();
   await expect(page.locator(".cm-md-table-raw").first()).toBeVisible();
-  await lineWithText(page, "Table").click({ button: "right" });
+  // The "| Table |" row. (Text matching ignores case, so "Table" alone would
+  // also find "Decide how a table is edited" above the table.)
+  const tableRow = page.locator(".cm-md-table-raw", { hasText: "caret inside the table" });
+  await tableRow.click({ button: "right" });
   await page.getByRole("menuitem", { name: "Insert row above" }).click();
   expect(await docText(page)).toMatch(/\| +\| +\| +\|\n\| Table/);
 
-  await lineWithText(page, "Table").click({ button: "right" });
+  await tableRow.click({ button: "right" });
   await page.getByRole("menuitem", { name: "Delete table" }).click();
   await expect(page.locator(".cm-md-table, .cm-md-table-raw")).toHaveCount(0);
   expect(await docText(page)).not.toContain("| Node");

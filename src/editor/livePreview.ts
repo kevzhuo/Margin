@@ -614,16 +614,12 @@ function treeChanged(a: EditorState, b: EditorState): boolean {
 const BLOCK_CONTAINERS = new Set(["Document", "Blockquote", "BulletList", "OrderedList", "ListItem"]);
 
 /**
- * Rendered tables are block widgets, which view plugins may not provide, so they
- * live in this field. It only walks block containers, so it stays cheap even in
- * long notes.
- */
-/**
  * Block widgets: tables, and `$$` math blocks. They replace whole lines,
  * which a view plugin may not do, so they live in a state field. Away from
  * the caret a table or formula is drawn in place of its source; at the caret,
  * a table shows its source and a formula shows its source with a live
- * preview underneath. Exported for tests.
+ * preview underneath. Only block containers are walked, so this stays cheap
+ * in long notes. Exported for tests.
  */
 export function buildBlockDecorations(state: EditorState, focused = state.field(focusedField, false) ?? true): DecorationSet {
   const doc = state.doc;
