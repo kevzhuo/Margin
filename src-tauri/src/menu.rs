@@ -109,9 +109,11 @@ pub const HELP: &[Item] = &[(
 
 /// Every custom item, for tests and for the frontend contract.
 pub fn all_items() -> impl Iterator<Item = &'static Item> {
-    [APP, QUIT, FILE, FIND, VIEW, ZOOM, THEME, GO, FORMAT, BLOCKS, HELP]
-        .into_iter()
-        .flatten()
+    [
+        APP, QUIT, FILE, FIND, VIEW, ZOOM, THEME, GO, FORMAT, BLOCKS, HELP,
+    ]
+    .into_iter()
+    .flatten()
 }
 
 fn add<'m, R: Runtime>(

@@ -35,6 +35,8 @@ jobs:
           cache: npm
 
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
 
       - uses: swatinem/rust-cache@v2
         with:
@@ -48,6 +50,13 @@ jobs:
 
       - name: Install npm dependencies
         run: npm ci
+
+      - name: Rust formatting and lints
+        if: runner.os == 'Linux'
+        working-directory: src-tauri
+        run: |
+          cargo fmt --check
+          cargo clippy --all-targets -- -D warnings
 
       - name: Rust unit tests
         run: cargo test --manifest-path src-tauri/Cargo.toml

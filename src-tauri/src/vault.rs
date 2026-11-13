@@ -742,9 +742,7 @@ fn watch_path_relevant(root: &Path, path: &Path) -> bool {
     // Directories and Markdown files only. A removed path no longer exists,
     // so judge by name when we cannot stat it.
     match path.file_name().map(|n| n.to_string_lossy().into_owned()) {
-        Some(name) => {
-            path.is_dir() || is_listed(&name) || (!path.exists() && !name.contains('.'))
-        }
+        Some(name) => path.is_dir() || is_listed(&name) || (!path.exists() && !name.contains('.')),
         None => false,
     }
 }
@@ -1131,8 +1129,14 @@ mod tests {
             sections,
             vec![
                 ("sunset tickets".to_string(), Some("Budget".to_string())),
-                ("## Sunset spots".to_string(), Some("Sunset spots".to_string())),
-                ("the best sunset".to_string(), Some("Sunset spots".to_string())),
+                (
+                    "## Sunset spots".to_string(),
+                    Some("Sunset spots".to_string())
+                ),
+                (
+                    "the best sunset".to_string(),
+                    Some("Sunset spots".to_string())
+                ),
             ]
         );
     }
@@ -1233,7 +1237,13 @@ mod tests {
         let images = list_images_at(root).unwrap();
         let names: Vec<_> = images
             .iter()
-            .map(|i| Path::new(&i.path).file_name().unwrap().to_string_lossy().into_owned())
+            .map(|i| {
+                Path::new(&i.path)
+                    .file_name()
+                    .unwrap()
+                    .to_string_lossy()
+                    .into_owned()
+            })
             .collect();
         assert_eq!(names, vec!["a.png", "Beach.JPG"]);
         let a = images.iter().find(|i| i.path.ends_with("a.png")).unwrap();
