@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEven
 import { dirname, fileManagerLabel, isPdf, isWithin, stripExtension, type FileNode } from "../backend";
 import { useStore } from "../state/store";
 import { sortTree } from "../state/treeSort";
+import { carriesFiles, droppedPdfs } from "../state/fileDrops";
 import { confirmAndDelete, formatShortcut } from "../state/appCommands";
 import { ChevronRight, FilePdf, Folder } from "./icons";
 import { ContextMenu, type MenuItem } from "./ContextMenu";
@@ -241,7 +242,28 @@ export function FileTree() {
     setDropTarget(null);
   };
 
+  /** Where files dropped from outside go: the folder under the pointer, or the folder of the note under it. */
+  const fileTargetFor = (el: EventTarget | null): string | null => {
+    const row = (el as Element | null)?.closest?.<HTMLElement>("[data-path]");
+    if (!row?.dataset.path) return vaultRoot;
+    return row.dataset.kind === "dir" ? row.dataset.path : dirname(row.dataset.path);
+  };
+
+  const highlight = (target: string | null) => {
+    if (target === dropTarget) return;
+    clearSpring();
+    setDropTarget(target);
+    if (target && target !== vaultRoot && !expandedDirs[target]) springTimer.current = setTimeout(() => toggleDir(target), SPRING_OPEN_MS);
+  };
+
   const onDragOver = (e: DragEvent) => {
+    if (!dragging && carriesFiles(e.dataTransfer)) {
+      // PDFs from Finder or a browser, copied into the folder they're dropped on.
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "copy";
+      highlight(fileTargetFor(e.target));
+      return;
+    }
     if (!dragging) return;
     const target = targetFor(e.target);
     if (!target) {
@@ -264,6 +286,15 @@ export function FileTree() {
   };
 
   const onDrop = (e: DragEvent) => {
+    if (!dragging && carriesFiles(e.dataTransfer)) {
+      e.preventDefault();
+      const target = fileTargetFor(e.target);
+      resetDrag();
+      const pdfs = droppedPdfs(e.dataTransfer);
+      if (pdfs.length) void useStore.getState().addPdfs(pdfs, target ?? undefined);
+      else useStore.getState().pushToast("Only PDFs can be added to the sidebar. Drop images onto a note.");
+      return;
+    }
     if (!dragging) return;
     e.preventDefault();
     const target = targetFor(e.target);

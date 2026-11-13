@@ -1161,6 +1161,40 @@ html.titlebar-overlay .outline {
 }
 .pdf-page-number {
   font-variant-numeric: tabular-nums;
+  color: var(--text-3);
+}
+button.pdf-page-number:hover {
+  color: var(--text);
+}
+.pdf-page-input {
+  font: inherit;
+  color: var(--text);
+  background: var(--bg-hover);
+  border: 0;
+  border-radius: 4px;
+  padding: 0 4px;
+  text-align: center;
+  box-sizing: content-box;
+  outline: none;
+  box-shadow: 0 0 0 2px var(--selection);
+  user-select: text;
+  -webkit-user-select: text;
+}
+/* Links in a PDF: invisible areas over the drawn text, above the text layer. */
+.pdf-links {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+.pdf-link {
+  position: absolute;
+  pointer-events: auto;
+  border-radius: 2px;
+  cursor: pointer;
+}
+.pdf-link:hover {
+  background: rgba(35, 131, 226, 0.12);
 }
 .pdf-zoom {
   display: inline-flex;

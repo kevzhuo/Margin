@@ -15,6 +15,7 @@ import { noteTitle, outlineVisible, panelFits, sidebarVisible, useStore } from "
 import { appCommands, matchesShortcut } from "./state/appCommands";
 import { prefersReducedMotion } from "./components/usePresence";
 import { connectMenu } from "./state/menuBridge";
+import { carriesFiles, droppedPdfs } from "./state/fileDrops";
 import { SwipeNavigation } from "./components/SwipeNavigation";
 
 // pdf.js is large: it loads the first time a PDF is opened.
@@ -166,21 +167,39 @@ function useShortcuts() {
 }
 
 /**
- * A file dropped anywhere the editor doesn't handle it would make the web
- * view navigate to that file, replacing the app. Refuse such drops; the
- * editor takes its own (images) before this sees them.
+ * Files dropped on the window. PDFs are copied into the vault: the sidebar
+ * puts them in the folder they land on, anywhere else in the open note's
+ * folder. Images dropped on a note go into it (the editor handles those).
+ * Anything else is refused, so a stray drop can never make the web view
+ * navigate to the file and replace the app.
  */
-function useStrayDrops() {
+function useFileDrops() {
   useEffect(() => {
-    const refuse = (event: DragEvent) => {
-      if (!event.dataTransfer || ![...event.dataTransfer.types].includes("Files") || event.defaultPrevented) return;
+    // Capture, so a PDF never reaches the editor, which would try to insert it as text.
+    const takePdfs = (event: DragEvent) => {
+      if ((event.target as Element | null)?.closest?.(".tree")) return;
+      const pdfs = droppedPdfs(event.dataTransfer);
+      if (!pdfs.length || !useStore.getState().vaultRoot) return;
       event.preventDefault();
-      if (event.type === "dragover") event.dataTransfer.dropEffect = "none";
+      event.stopPropagation();
+      void useStore.getState().addPdfs(pdfs);
     };
-    window.addEventListener("dragover", refuse);
+    const allow = (event: DragEvent) => {
+      if (!carriesFiles(event.dataTransfer) || event.defaultPrevented) return;
+      event.preventDefault();
+      event.dataTransfer!.dropEffect = useStore.getState().vaultRoot ? "copy" : "none";
+    };
+    const refuse = (event: DragEvent) => {
+      if (!carriesFiles(event.dataTransfer) || event.defaultPrevented) return;
+      event.preventDefault();
+      if (useStore.getState().vaultRoot) useStore.getState().pushToast("Drop PDFs anywhere to add them to the vault, or images onto a note.");
+    };
+    window.addEventListener("drop", takePdfs, true);
+    window.addEventListener("dragover", allow);
     window.addEventListener("drop", refuse);
     return () => {
-      window.removeEventListener("dragover", refuse);
+      window.removeEventListener("drop", takePdfs, true);
+      window.removeEventListener("dragover", allow);
       window.removeEventListener("drop", refuse);
     };
   }, []);
@@ -202,7 +221,7 @@ export default function App() {
   useResponsivePanels();
   useWindowTitle();
   useShortcuts();
-  useStrayDrops();
+  useFileDrops();
 
   useEffect(() => {
     const root = document.documentElement;

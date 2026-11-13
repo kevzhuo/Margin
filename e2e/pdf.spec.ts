@@ -1,4 +1,4 @@
-import { addPdf, docText, expect, openApp, test } from "./helpers";
+import { activePath, addPdf, docText, expect, makePdf, openApp, test } from "./helpers";
 
 test.beforeEach(async ({ page }) => {
   await openApp(page);
@@ -71,4 +71,99 @@ test("a file that isn't a valid PDF shows a message instead of the viewer", asyn
   });
   await page.locator(".tree-row", { hasText: "Broken.pdf" }).click();
   await expect(page.locator(".pdf-message")).toContainText("Couldn’t open this PDF");
+});
+
+/** Drop files on an element the way Finder would. */
+async function dropFiles(page: import("@playwright/test").Page, selector: string, files: { name: string; bytes: number[]; type: string }[]) {
+  const data = await page.evaluateHandle((files) => {
+    const dt = new DataTransfer();
+    for (const f of files) dt.items.add(new File([new Uint8Array(f.bytes)], f.name, { type: f.type }));
+    return dt;
+  }, files);
+  await page.locator(selector).first().dispatchEvent("dragover", { dataTransfer: data });
+  await page.locator(selector).first().dispatchEvent("drop", { dataTransfer: data });
+}
+
+test("dropping a PDF on a sidebar folder copies it there and opens it", async ({ page }) => {
+  const bytes = makePdf(["Dropped"]);
+  await dropFiles(page, '.tree-row[data-kind="dir"]:has-text("Journal")', [{ name: "Ticket.pdf", bytes, type: "application/pdf" }]);
+  await expect(page.locator(".toast")).toContainText("Added “Ticket.pdf”");
+  await expect.poll(() => activePath(page)).toBe("/Demo Vault/Journal/Ticket.pdf");
+  await expect(page.locator(".pdf-page")).toHaveCount(1);
+  // The same name again never overwrites.
+  await dropFiles(page, '.tree-row[data-kind="dir"]:has-text("Journal")', [{ name: "Ticket.pdf", bytes, type: "application/pdf" }]);
+  await expect.poll(() => activePath(page)).toBe("/Demo Vault/Journal/Ticket 2.pdf");
+});
+
+test("dropping a PDF on the editor adds it next to the open note, and other files are turned away", async ({ page }) => {
+  const before = await docText(page);
+  await dropFiles(page, ".cm-content", [{ name: "Spec.pdf", bytes: makePdf(["Spec"]), type: "application/pdf" }]);
+  await expect.poll(() => activePath(page)).toBe("/Demo Vault/Projects/Spec.pdf");
+  await page.locator(".tree-row", { hasText: "Editor design notes" }).click();
+  expect(await docText(page)).toBe(before);
+
+  await dropFiles(page, ".topbar", [{ name: "archive.zip", bytes: [80, 75, 3, 4], type: "application/zip" }]);
+  await expect(page.locator(".toast", { hasText: "Drop PDFs anywhere to add them to the vault" })).toBeVisible();
+});
+
+test("reading aids: the PDF's contents in the outline, links, go to page, and pinch to zoom", async ({ page }) => {
+  await addPdf(page, "/Demo Vault/Reading", "Book.pdf", ["Cover", "Chapter one", "Chapter two", "Notes", "Index"], {
+    outline: [
+      { title: "Chapter one", page: 2 },
+      { title: "Chapter two", page: 3 },
+      { title: "Index", page: 5 },
+    ],
+    links: [
+      { from: 1, toPage: 4 },
+      { from: 2, url: "https://example.com/" },
+    ],
+  });
+  await page.locator(".tree-row", { hasText: "Book.pdf" }).click();
+  const viewer = page.getByRole("document", { name: "PDF: Book.pdf" });
+  const pageNumber = page.locator(".pdf-page-number");
+  await expect(pageNumber).toHaveText("Page 1 of 5");
+
+  // The table of contents, and following it.
+  const outline = page.locator(".outline");
+  await expect(outline.locator(".section-label")).toHaveText("Contents");
+  await expect(outline.locator(".outline-item")).toHaveText(["Chapter one", "Chapter two", "Index"]);
+  await outline.locator(".outline-item", { hasText: "Index" }).click();
+  await expect(pageNumber).toHaveText("Page 5 of 5");
+  await expect(outline.locator(".outline-item.on")).toHaveText("Index");
+
+  // Go to page: click the page number and type one.
+  await pageNumber.click();
+  await page.getByRole("textbox", { name: "Go to page" }).fill("2");
+  await page.keyboard.press("Enter");
+  await expect(pageNumber).toHaveText("Page 2 of 5");
+  await expect(outline.locator(".outline-item.on")).toHaveText("Chapter one");
+
+  // A web link opens in the browser, not in Margin.
+  await page.evaluate(() => {
+    const b = window.__margin!.store.getState().backend!;
+    (window as unknown as { opened: string[] }).opened = [];
+    b.openExternal = async (url: string) => void (window as unknown as { opened: string[] }).opened.push(url);
+  });
+  await page.locator('.pdf-page[data-page="2"] .pdf-link').click();
+  expect(await page.evaluate(() => (window as unknown as { opened: string[] }).opened)).toEqual(["https://example.com/"]);
+
+  // A link to another page goes there.
+  await outline.locator(".outline-item", { hasText: "Chapter one" }).click();
+  await viewer.evaluate((el) => (el.scrollTop = 0));
+  await expect(pageNumber).toHaveText("Page 1 of 5");
+  await page.locator('.pdf-page[data-page="1"] .pdf-link').click();
+  await expect(pageNumber).toHaveText("Page 4 of 5");
+
+  // Pinch (a ctrl+wheel gesture on most trackpads) zooms the PDF, not the window.
+  await viewer.hover();
+  await page.keyboard.down("Control");
+  await page.mouse.wheel(0, -120);
+  await page.keyboard.up("Control");
+  await expect(page.locator(".pdf-zoom-level")).not.toHaveText("100%");
+});
+
+test("a PDF without a table of contents says so", async ({ page }) => {
+  await addPdf(page, "/Demo Vault/Reading", "Plain.pdf", ["Just text"]);
+  await page.locator(".tree-row", { hasText: "Plain.pdf" }).click();
+  await expect(page.locator(".outline-empty")).toHaveText("This PDF has no table of contents");
 });

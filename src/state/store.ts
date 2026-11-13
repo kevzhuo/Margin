@@ -63,6 +63,15 @@ export interface AttachmentScan {
   usage: Map<string, ImageUse[]>;
 }
 
+/** An entry in a PDF's own table of contents (its bookmarks). */
+export interface PdfOutlineItem {
+  title: string;
+  /** 1-based page it points to. */
+  page: number;
+  /** Nesting depth, 0 at the top. */
+  depth: number;
+}
+
 export interface ConfirmRequest {
   title: string;
   message?: string;
@@ -207,6 +216,12 @@ export interface AppState {
   readingMode: boolean;
   /** PDF zoom, where 1 fits the page to the window's width. */
   pdfZoom: number;
+  /** The open PDF's table of contents, shown in the outline panel. */
+  pdfOutline: PdfOutlineItem[];
+  /** The page in the middle of the PDF viewer. */
+  pdfPage: number;
+  /** A page the viewer should scroll to; `seq` changes on every request. */
+  pdfJump: { page: number; seq: number } | null;
   /** Whether each panel fits beside a comfortably wide editor right now. */
   sidebarFits: boolean;
   outlineFits: boolean;
@@ -292,6 +307,8 @@ export interface AppState {
   setReadingMode(on: boolean): void;
   /** Step the PDF zoom in or out, or back to fitting the width (0). */
   zoomPdf(direction: -1 | 0 | 1): void;
+  /** Scroll the open PDF to a page. */
+  goToPdfPage(page: number): void;
   setTitleSync(on: boolean): void;
   setFits(sidebarFits: boolean, outlineFits: boolean): void;
   closePeeks(): void;
@@ -304,6 +321,11 @@ export interface AppState {
   setAttachmentsOpen(open: boolean): void;
   /** List the vault's images and find which notes use each (the open note as it is now). */
   scanAttachments(): Promise<AttachmentScan | null>;
+  /**
+   * Copy PDFs dropped from elsewhere into the vault: into `dir`, or the open
+   * note's folder. Opens the last one. Resolves to the new paths.
+   */
+  addPdfs(files: File[], dir?: string): Promise<string[]>;
   /** Move images to the Trash. Resolves to the paths that were moved. */
   trashImages(paths: string[]): Promise<string[]>;
   setHeadings(headings: Heading[]): void;
@@ -346,6 +368,8 @@ function serially<T>(op: () => Promise<T>): Promise<T> {
 }
 
 export const SAVE_DELAY_MS = 500;
+/** Largest PDF that can be dropped in, in bytes. Bigger ones can still be copied into the folder in Finder. */
+export const MAX_PDF_BYTES = 500 * 1024 * 1024;
 /** PDF zoom levels, as fractions of the fit-to-width size. */
 export const PDF_ZOOM_STEPS = [0.5, 0.67, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, 3];
 /** How many vaults the welcome screen remembers. */
@@ -517,6 +541,9 @@ export const useStore = create<AppState>((set, get) => {
     ...initialSettings(settings),
     readingMode: false,
     pdfZoom: 1,
+    pdfOutline: [],
+    pdfPage: 1,
+    pdfJump: null,
     sidebarFits: true,
     outlineFits: true,
     sidebarPeek: false,
@@ -1050,6 +1077,10 @@ export const useStore = create<AppState>((set, get) => {
       set({ readingMode });
     },
 
+    goToPdfPage(page) {
+      set((s) => ({ pdfJump: { page, seq: (s.pdfJump?.seq ?? 0) + 1 } }));
+    },
+
     zoomPdf(direction) {
       const steps = PDF_ZOOM_STEPS;
       const current = get().pdfZoom;
@@ -1109,6 +1140,35 @@ export const useStore = create<AppState>((set, get) => {
         ),
       ]);
       return { images, usage: imageUsage(vaultRoot, images, notes) };
+    },
+
+    async addPdfs(files, dir) {
+      const { backend, vaultRoot, activePath } = get();
+      if (!backend || !vaultRoot) return [];
+      const openDir = activePath ? dirname(activePath) : null;
+      const target = dir ?? (openDir && isWithin(openDir, vaultRoot) ? openDir : vaultRoot);
+      const added: string[] = [];
+      for (const file of files) {
+        if (file.size > MAX_PDF_BYTES) {
+          get().pushToast(`${file.name} is too large to add (over ${MAX_PDF_BYTES / 1024 / 1024} MB).`, "error");
+          continue;
+        }
+        try {
+          const data = new Uint8Array(await file.arrayBuffer());
+          const name = isPdf(file.name) ? file.name : `${file.name || "Document"}.pdf`;
+          // Never overwrites: a taken name becomes "Paper 2.pdf".
+          added.push(await serially(() => backend.saveAttachment(target, name, data)));
+        } catch (e) {
+          fail(`Could not add ${file.name || "the PDF"}`, e);
+        }
+      }
+      if (!added.length) return added;
+      await get().refreshTree();
+      if (target !== vaultRoot) set((s) => ({ expandedDirs: { ...s.expandedDirs, [target]: true } }));
+      persist();
+      get().pushToast(added.length === 1 ? `Added “${basename(added[0])}”` : `Added ${added.length} PDFs`);
+      await get().openNote(added[added.length - 1]);
+      return added;
     },
 
     async trashImages(paths) {

@@ -5,11 +5,13 @@ import {
   getDocument,
   type PDFDocumentLoadingTask,
   type PDFDocumentProxy,
+  type PDFPageProxy,
+  type PageViewport,
   type RenderTask,
 } from "pdfjs-dist/legacy/build/pdf.mjs";
 import workerUrl from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
 import { basename, fileManagerLabel } from "../backend";
-import { useStore } from "../state/store";
+import { useStore, type PdfOutlineItem } from "../state/store";
 import { formatShortcut } from "../state/appCommands";
 import { FolderOpen } from "./icons";
 
@@ -27,6 +29,38 @@ const PRELOAD = "1200px 0px";
 interface PageSize {
   width: number;
   height: number;
+}
+
+/** Trackpad pinch distance (in wheel delta) per zoom step. */
+const PINCH_STEP = 40;
+
+/** The 1-based page a PDF destination (a name, or an explicit [page, …] array) points to. */
+async function pageOfDest(doc: PDFDocumentProxy, dest: unknown): Promise<number | null> {
+  const explicit = typeof dest === "string" ? await doc.getDestination(dest) : dest;
+  if (!Array.isArray(explicit) || explicit[0] == null) return null;
+  const target = explicit[0];
+  const index = typeof target === "number" ? target : await doc.getPageIndex(target);
+  return index + 1;
+}
+
+interface RawOutline {
+  title: string;
+  dest: unknown;
+  items: RawOutline[];
+}
+
+/** The PDF's bookmarks, flattened with their depth and page, for the outline panel. */
+async function readOutline(doc: PDFDocumentProxy): Promise<PdfOutlineItem[]> {
+  const out: PdfOutlineItem[] = [];
+  const walk = async (items: RawOutline[], depth: number) => {
+    for (const item of items) {
+      const page = await pageOfDest(doc, item.dest).catch(() => null);
+      if (page) out.push({ title: item.title.trim() || "Untitled", page, depth });
+      if (item.items?.length) await walk(item.items, depth + 1);
+    }
+  };
+  await walk(((await doc.getOutline()) ?? []) as RawOutline[], 0);
+  return out;
 }
 
 /** A PDF from the vault, shown in place of the editor. */
@@ -72,6 +106,8 @@ export default function PdfView() {
       if (cancelled) return;
       setSizes(pages);
       setDoc(loaded);
+      const outline = await readOutline(loaded).catch(() => []);
+      if (!cancelled) useStore.setState({ pdfOutline: outline });
     })().catch((e: unknown) => {
       if (cancelled) return;
       const name = e instanceof Error ? e.name : "";
@@ -81,6 +117,7 @@ export default function PdfView() {
     return () => {
       cancelled = true;
       void loading?.destroy();
+      useStore.setState({ pdfOutline: [], pdfPage: 1 });
     };
   }, [backend, path, version]);
 
@@ -125,21 +162,73 @@ export default function PdfView() {
     lastScale.current = scale;
   }, [scale]);
 
+  /** Where page `i` (0-based) starts in the scrolling area. */
+  const pageTop = (i: number) => GUTTER + sizes.slice(0, i).reduce((sum, s) => sum + s.height * scale + GUTTER / 2, 0);
+
   // The page in the middle of the window is the current one.
   const onScroll = () => {
     const el = scrollRef.current;
     if (!el) return;
     scrollTop.current = el.scrollTop;
     const middle = el.scrollTop + el.clientHeight / 2;
-    let top = GUTTER;
-    for (let i = 0; i < sizes.length; i++) {
-      top += sizes[i].height * scale + GUTTER / 2;
-      if (top > middle) {
-        if (page !== i + 1) setPage(i + 1);
-        return;
+    let current = sizes.length;
+    for (let i = 1; i < sizes.length; i++) {
+      if (pageTop(i) > middle) {
+        current = i;
+        break;
       }
     }
+    if (current !== page) {
+      setPage(current);
+      useStore.setState({ pdfPage: current });
+    }
   };
+
+  // Go to a page asked for elsewhere: the outline, a link in the PDF, the page box.
+  const jump = useStore((s) => s.pdfJump);
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el || !jump || !scale || !sizes.length) return;
+    const target = Math.min(Math.max(jump.page, 1), sizes.length);
+    el.scrollTo({ top: pageTop(target - 1) - GUTTER / 2 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jump]);
+
+  // Pinch to zoom: trackpads send ctrl+wheel in most web views, gesture events in WebKit.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    let pinch = 0;
+    let lastScale = 1;
+    const onWheel = (e: WheelEvent) => {
+      if (!e.ctrlKey) return;
+      e.preventDefault();
+      pinch += e.deltaY;
+      if (Math.abs(pinch) < PINCH_STEP) return;
+      useStore.getState().zoomPdf(pinch < 0 ? 1 : -1);
+      pinch = 0;
+    };
+    const onGestureStart = (e: Event) => {
+      e.preventDefault();
+      lastScale = 1;
+    };
+    const onGestureChange = (e: Event) => {
+      e.preventDefault();
+      const scale = (e as Event & { scale: number }).scale;
+      if (scale > lastScale * 1.15 || scale < lastScale / 1.15) {
+        useStore.getState().zoomPdf(scale > lastScale ? 1 : -1);
+        lastScale = scale;
+      }
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    el.addEventListener("gesturestart", onGestureStart);
+    el.addEventListener("gesturechange", onGestureChange);
+    return () => {
+      el.removeEventListener("wheel", onWheel);
+      el.removeEventListener("gesturestart", onGestureStart);
+      el.removeEventListener("gesturechange", onGestureChange);
+    };
+  }, [doc]);
 
   if (error) {
     return (
@@ -165,9 +254,7 @@ export default function PdfView() {
       </div>
       {doc && (
         <div className="status-pill pdf-controls">
-          <span className="pdf-page-number">
-            Page {page} of {sizes.length}
-          </span>
+          <PageBox page={page} count={sizes.length} />
           <span className="pdf-zoom">
             <button className="icon-button small" onClick={() => useStore.getState().zoomPdf(-1)} aria-label="Zoom out" title={`Zoom out (${formatShortcut("Mod+-")})`}>
               −
@@ -183,6 +270,86 @@ export default function PdfView() {
       )}
     </div>
   );
+}
+
+/** "Page 3 of 12": click it to type a page to go to. */
+function PageBox({ page, count }: { page: number; count: number }) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState("");
+  if (!editing) {
+    return (
+      <button
+        className="pdf-page-number"
+        onClick={() => {
+          setValue(String(page));
+          setEditing(true);
+        }}
+        title="Go to page…"
+      >
+        Page {page} of {count}
+      </button>
+    );
+  }
+  const go = () => {
+    const n = Number.parseInt(value, 10);
+    if (Number.isFinite(n)) useStore.getState().goToPdfPage(Math.min(Math.max(n, 1), count));
+    setEditing(false);
+  };
+  return (
+    <span className="pdf-page-number">
+      Page{" "}
+      <input
+        className="pdf-page-input"
+        aria-label="Go to page"
+        value={value}
+        autoFocus
+        inputMode="numeric"
+        style={{ width: `calc(${String(count).length}ch + 8px)` }}
+        onFocus={(e) => e.currentTarget.select()}
+        onChange={(e) => setValue(e.target.value.replace(/\D/g, ""))}
+        onKeyDown={(e) => {
+          e.stopPropagation();
+          if (e.key === "Enter") go();
+          else if (e.key === "Escape") setEditing(false);
+        }}
+        onBlur={() => setEditing(false)}
+      />{" "}
+      of {count}
+    </span>
+  );
+}
+
+/** Links in a PDF: to its own pages (scroll there) or to the web (open in the browser). */
+async function linkLayer(doc: PDFDocumentProxy, page: PDFPageProxy, viewport: PageViewport): Promise<HTMLElement | null> {
+  const links = (await page.getAnnotations({ intent: "display" })).filter((a) => a.subtype === "Link" && (a.url || a.dest));
+  if (!links.length) return null;
+  const layer = document.createElement("div");
+  layer.className = "pdf-links";
+  for (const link of links) {
+    const [x1, y1] = viewport.convertToViewportPoint(link.rect[0], link.rect[1]);
+    const [x2, y2] = viewport.convertToViewportPoint(link.rect[2], link.rect[3]);
+    const a = document.createElement("a");
+    a.className = "pdf-link";
+    a.style.cssText = `left:${Math.min(x1, x2)}px;top:${Math.min(y1, y2)}px;width:${Math.abs(x2 - x1)}px;height:${Math.abs(y2 - y1)}px`;
+    if (link.url) {
+      const url = String(link.url);
+      if (!/^(https?:|mailto:)/i.test(url)) continue;
+      a.href = url;
+      a.title = url;
+      a.addEventListener("click", (e) => {
+        e.preventDefault();
+        void useStore.getState().backend?.openExternal(url);
+      });
+    } else {
+      a.href = "#";
+      a.addEventListener("click", (e) => {
+        e.preventDefault();
+        void pageOfDest(doc, link.dest).then((target) => target && useStore.getState().goToPdfPage(target));
+      });
+    }
+    layer.appendChild(a);
+  }
+  return layer;
 }
 
 /**
@@ -229,7 +396,9 @@ function PdfPage({ doc, index, size, scale, root }: { doc: PDFDocumentProxy; ind
       const layer = document.createElement("div");
       layer.className = "textLayer";
       text = new TextLayer({ textContentSource: page.streamTextContent(), container: layer, viewport });
-      el.replaceChildren(canvas, layer);
+      const links = await linkLayer(doc, page, viewport).catch(() => null);
+      if (cancelled) return;
+      el.replaceChildren(canvas, layer, ...(links ? [links] : []));
       await text.render();
     })().catch(() => {
       // A cancelled render rejects; a page that fails to draw stays blank.

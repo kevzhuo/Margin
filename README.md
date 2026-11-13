@@ -69,10 +69,19 @@ go to the Trash, so nothing is lost by accident).
 
 ### PDFs
 
-PDFs in your vault folder show up in the sidebar next to your notes. Click one
-to read it in Margin's own viewer, with page numbers, zoom (⌘+ and ⌘−) and text
-you can select and copy. Margin remembers where you were in each PDF and
-reloads it if the file changes. It never edits your PDFs.
+PDFs in your vault folder show up in the sidebar next to your notes. To add
+one, drag it into Margin: drop it on a folder in the sidebar, or anywhere else
+to put it next to the note you have open. Click a PDF to read it in Margin's own
+viewer:
+
+- its table of contents in the side panel, highlighting where you are;
+- links that work, to other pages or out to your browser;
+- zoom with ⌘+ and ⌘−, the buttons, or a pinch on the trackpad;
+- click the page number to jump to a page;
+- select and copy text.
+
+Margin remembers where you were in each PDF and reloads it if the file changes.
+It never edits your PDFs.
 
 ### Finding your way
 
