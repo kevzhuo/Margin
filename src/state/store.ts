@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { Transaction } from "@codemirror/state";
 import type { EditorView } from "@codemirror/view";
 import {
   basename,
@@ -9,6 +10,7 @@ import {
   isPdf,
   isWithin,
   joinPath,
+  relativePath,
   stripExtension,
   type FileNode,
   type ImageFile,
@@ -18,9 +20,10 @@ import {
 import type { Heading } from "../editor/outline";
 import type { TableMenuRequest } from "../editor/tableEdit";
 import { fileNameFromTitle, isPlaceholderName, replaceTitle, titleFromDoc } from "./title";
-import { ATTACHMENTS_DIR, MAX_ATTACHMENT_BYTES, attachmentName, imageMarkdown, isImageFile, relativePath } from "./attachments";
+import { ATTACHMENTS_DIR, MAX_ATTACHMENT_BYTES, attachmentName, imageMarkdown, isImageFile } from "./attachments";
 import { SORT_LABELS, touchFile, type SortBy } from "./treeSort";
 import { imageUsage, type ImageUse } from "./attachmentUsage";
+import { applyEdits, relinkEdits } from "./relink";
 
 const SORT_KEYS = Object.keys(SORT_LABELS) as SortBy[];
 
@@ -185,6 +188,11 @@ function remap(path: string, from: string, to: string): string {
   if (path === from) return to;
   if (isWithin(path, from)) return to + path.slice(from.length);
   return path;
+}
+
+/** Every file and folder in a tree, depth first. */
+function allNodes(nodes: FileNode[]): FileNode[] {
+  return nodes.flatMap((n) => [n, ...allNodes(n.children ?? [])]);
 }
 
 export interface AppState {
@@ -431,6 +439,59 @@ export const useStore = create<AppState>((set, get) => {
       };
     });
     persist();
+  };
+
+  /**
+   * `from` was renamed or moved to `to`: rewrite relative links in every note
+   * so each leads where it did before (see relink.ts). Runs inside the move's
+   * turn in the file-operation queue, so nothing else writes notes meanwhile.
+   * The open note changes in the editor, keeping its caret and unsaved edits,
+   * and outside its undo history (undoing it would only break the links
+   * again). Never throws: notes that can't be updated are reported.
+   */
+  const relinkAfterMove = async (backend: VaultBackend, root: string, from: string, to: string) => {
+    let nodes: FileNode[];
+    try {
+      nodes = allNodes(await backend.listTree(root));
+    } catch (e) {
+      fail("Could not update links", e);
+      return;
+    }
+    // Everything at `to` was at `from` before: a move never replaces a file.
+    const before = (path: string) => remap(path, to, from);
+    const existedBefore = new Set(nodes.map((n) => before(n.path)));
+    const existed = (path: string) => existedBefore.has(path);
+    const move = { from, to };
+    let updated = 0;
+    const failed: string[] = [];
+    const relinkNote = async (path: string) => {
+      const edits = (text: string) => relinkEdits(text, before(path), path, move, existed);
+      const { activePath, editor } = get();
+      if (path === activePath && (editor || latestDoc !== null)) {
+        const text = editor ? editor.state.doc.toString() : latestDoc!;
+        const changes = edits(text);
+        if (!changes.length) return;
+        if (editor) editor.dispatch({ changes, annotations: Transaction.addToHistory.of(false) });
+        else get().updateContent(applyEdits(text, changes));
+        updated++;
+        return;
+      }
+      const text = await backend.readNote(path);
+      const changes = edits(text);
+      if (!changes.length) return;
+      await backend.writeNote(path, applyEdits(text, changes));
+      updated++;
+    };
+    await Promise.all(
+      nodes
+        .filter((n) => n.kind === "file" && isMarkdown(n.name))
+        .map((n) => relinkNote(n.path).catch(() => void failed.push(n.path))),
+    );
+    if (failed.length) {
+      const which = failed.length === 1 ? `“${stripExtension(basename(failed[0]))}”` : `${failed.length} notes`;
+      get().pushToast(`Could not update links in ${which}`, "error");
+    }
+    if (updated) get().pushToast(`Updated links in ${updated} ${updated === 1 ? "note" : "notes"}`);
   };
 
   /** A file or folder was deleted: forget it everywhere. */
@@ -828,8 +889,8 @@ export const useStore = create<AppState>((set, get) => {
     },
 
     async renamePath(path, newName, opts = {}) {
-      const { backend, activePath } = get();
-      if (!backend) return;
+      const { backend, vaultRoot, activePath } = get();
+      if (!backend || !vaultRoot) return;
       const clean = newName.trim().replace(/[\\/]/g, "");
       if (!clean) {
         set({ renaming: null });
@@ -849,6 +910,7 @@ export const useStore = create<AppState>((set, get) => {
         await serially(async () => {
           await backend.renamePath(path, to);
           remapPaths(path, to);
+          await relinkAfterMove(backend, vaultRoot, path, to);
         });
         await get().refreshTree();
         set({ renaming: null });
@@ -890,8 +952,8 @@ export const useStore = create<AppState>((set, get) => {
     },
 
     async movePath(from, toDir) {
-      const { backend, activePath } = get();
-      if (!backend) return;
+      const { backend, vaultRoot, activePath } = get();
+      if (!backend || !vaultRoot) return;
       const to = joinPath(toDir, basename(from));
       if (to === from || dirname(from) === toDir) return;
       if (isWithin(toDir, from)) {
@@ -903,6 +965,7 @@ export const useStore = create<AppState>((set, get) => {
         await serially(async () => {
           await backend.renamePath(from, to);
           remapPaths(from, to);
+          await relinkAfterMove(backend, vaultRoot, from, to);
         });
         set((s) => ({ expandedDirs: { ...s.expandedDirs, [toDir]: true } }));
         await get().refreshTree();

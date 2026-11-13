@@ -4,6 +4,8 @@
  * relative path, so Typora, Obsidian, VS Code and GitHub all show them too.
  */
 
+import { encodeLinkPath } from "../backend/types";
+
 export const ATTACHMENTS_DIR = "attachments";
 
 /** Largest image accepted, in bytes. */
@@ -62,28 +64,6 @@ export function attachmentName(file: { name: string; type: string }, now = new D
   const ext = typed ?? own.match(IMAGE_NAME)?.[1]?.toLowerCase() ?? "png";
   const stamp = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} at ${pad(now.getHours())}.${pad(now.getMinutes())}.${pad(now.getSeconds())}`;
   return `Pasted image ${stamp}.${ext}`;
-}
-
-/**
- * Relative path from the folder `fromDir` to the file `to`, with `/`
- * separators. Both are absolute paths in the same vault.
- */
-export function relativePath(fromDir: string, to: string): string {
-  const split = (p: string) => p.split(/[\\/]+/).filter(Boolean);
-  const from = split(fromDir);
-  const target = split(to);
-  let common = 0;
-  while (common < from.length && common < target.length - 1 && from[common] === target[common]) common++;
-  return [...from.slice(common).map(() => ".."), ...target.slice(common)].join("/");
-}
-
-/**
- * Percent-encode the characters that would end or confuse a Markdown link
- * destination (spaces, brackets, parentheses, `<>`, `#`, `?`, `%`). Letters
- * from any language stay as they are, as Obsidian and Typora write them.
- */
-export function encodeLinkPath(path: string): string {
-  return path.replace(/[ ()[\]<>#?%]/g, (c) => "%" + c.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0"));
 }
 
 /** Markdown for an image. The alt text is the file's name without its extension. */

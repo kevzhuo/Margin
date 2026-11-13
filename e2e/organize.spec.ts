@@ -1,4 +1,4 @@
-import { activePath, expect, openApp, test } from "./helpers";
+import { activePath, docText, expect, lineWithText, openApp, test } from "./helpers";
 
 test.use({ permissions: ["clipboard-read", "clipboard-write"] });
 
@@ -46,6 +46,40 @@ test("F2 renames the open note", async ({ page }) => {
   await input.press("Enter");
   await expect.poll(() => activePath(page)).toMatch(/\/Design notes\.md$/);
   await expect(page).toHaveTitle("Design notes — Margin");
+});
+
+test("renaming a note keeps links to it working", async ({ page }) => {
+  await page.locator(".tree-row", { hasText: "Roadmap" }).click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Rename" }).click();
+  const input = page.locator(".rename-input");
+  await input.fill("Plan");
+  await input.press("Enter");
+  await expect(page.locator(".toast", { hasText: "Updated links in 1 note" })).toBeVisible();
+
+  // The inbox's link was rewritten, and following it opens the renamed note.
+  await page.locator(".tree-row", { hasText: "Inbox" }).click();
+  await expect.poll(() => docText(page)).toContain("[the roadmap](Projects/Plan.md#next)");
+  await lineWithText(page, "Loose thoughts").click();
+  await page.locator(".cm-md-link", { hasText: "the roadmap" }).click();
+  await expect.poll(() => activePath(page)).toBe("/Demo Vault/Projects/Plan.md");
+});
+
+test("moving the open note to another folder rewrites its links, and undo leaves them", async ({ page }) => {
+  await page.locator(".tree-row", { hasText: "Inbox" }).click();
+  await expect.poll(() => activePath(page)).toBe("/Demo Vault/Inbox.md");
+  await lineWithText(page, "Loose thoughts").click();
+  await page.keyboard.press("End");
+  await page.keyboard.type(" Typed.");
+
+  await page.locator(".tree-row", { hasText: "Inbox" }).dragTo(page.locator('.tree-row[data-kind="dir"]', { hasText: "Journal" }));
+  await expect.poll(() => activePath(page)).toBe("/Demo Vault/Journal/Inbox.md");
+  await expect.poll(() => docText(page)).toContain("[the roadmap](../Projects/Roadmap.md#next)");
+
+  // Undo takes back the typing, not the link that keeps working.
+  await lineWithText(page, "Loose thoughts").click();
+  await page.keyboard.press("ControlOrMeta+z");
+  await expect.poll(() => docText(page)).not.toContain("Typed.");
+  expect(await docText(page)).toContain("[the roadmap](../Projects/Roadmap.md#next)");
 });
 
 test("copy path shows a toast that dismisses itself", async ({ page }) => {

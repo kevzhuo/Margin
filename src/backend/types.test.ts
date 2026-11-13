@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { assetPath, findMatch, isWithin, resolveRelative, slugify } from "./types";
+import { assetPath, encodeLinkPath, findMatch, isWithin, relativePath, resolveRelative, slugify } from "./types";
 
 describe("resolveRelative", () => {
   it("resolves sibling, child and parent paths", () => {
@@ -28,6 +28,19 @@ describe("resolveRelative", () => {
 });
 
 describe("helpers", () => {
+  it("relativePath writes a path relative to a folder", () => {
+    expect(relativePath("/Vault/Projects", "/Vault/attachments/a.png")).toBe("../attachments/a.png");
+    expect(relativePath("/Vault", "/Vault/attachments/a.png")).toBe("attachments/a.png");
+    expect(relativePath("/Vault/A/B", "/Vault/attachments/a.png")).toBe("../../attachments/a.png");
+    expect(relativePath("C:\\Vault\\Notes", "C:\\Vault\\attachments\\a.png")).toBe("../attachments/a.png");
+  });
+
+  it("encodeLinkPath escapes only what would break a Markdown link", () => {
+    expect(encodeLinkPath("../attachments/Pasted image (1).png")).toBe("../attachments/Pasted%20image%20%281%29.png");
+    expect(encodeLinkPath("attachments/100% #1 [a] <b>?.png")).toBe("attachments/100%25%20%231%20%5Ba%5D%20%3Cb%3E%3F.png");
+    expect(encodeLinkPath("attachments/café 写真.png")).toBe("attachments/café%20写真.png");
+  });
+
   it("slugifies headings like GitHub", () => {
     expect(slugify("Decoration plan")).toBe("decoration-plan");
     expect(slugify("  What's next?  ")).toBe("whats-next");

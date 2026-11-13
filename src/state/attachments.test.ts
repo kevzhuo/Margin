@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { attachmentName, encodeLinkPath, imageMarkdown, isImageFile, relativePath, sanitizeFileName } from "./attachments";
+import { attachmentName, imageMarkdown, isImageFile, sanitizeFileName } from "./attachments";
 
 describe("attachment names", () => {
   const at = new Date(2026, 10, 5, 14, 32, 7);
@@ -30,19 +30,6 @@ describe("attachment names", () => {
 });
 
 describe("image links", () => {
-  it("are relative to the note's folder", () => {
-    expect(relativePath("/Vault/Projects", "/Vault/attachments/a.png")).toBe("../attachments/a.png");
-    expect(relativePath("/Vault", "/Vault/attachments/a.png")).toBe("attachments/a.png");
-    expect(relativePath("/Vault/A/B", "/Vault/attachments/a.png")).toBe("../../attachments/a.png");
-    expect(relativePath("C:\\Vault\\Notes", "C:\\Vault\\attachments\\a.png")).toBe("../attachments/a.png");
-  });
-
-  it("encode only what would break a Markdown link", () => {
-    expect(encodeLinkPath("../attachments/Pasted image (1).png")).toBe("../attachments/Pasted%20image%20%281%29.png");
-    expect(encodeLinkPath("attachments/100% #1 [a] <b>?.png")).toBe("attachments/100%25%20%231%20%5Ba%5D%20%3Cb%3E%3F.png");
-    expect(encodeLinkPath("attachments/café 写真.png")).toBe("attachments/café%20写真.png");
-  });
-
   it("use the file name as alt text, except for pasted images", () => {
     expect(imageMarkdown("../attachments/Sunset photo.png", "Sunset photo.png")).toBe("![Sunset photo](../attachments/Sunset%20photo.png)");
     expect(imageMarkdown("attachments/Pasted image 2026-11-05 at 14.32.07.png", "Pasted image 2026-11-05 at 14.32.07.png")).toBe(

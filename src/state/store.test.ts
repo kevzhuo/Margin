@@ -427,6 +427,71 @@ describe("folders, moves and deletes", () => {
   });
 });
 
+describe("links follow renames and moves", () => {
+  // The demo inbox links to "Projects/Roadmap.md#next".
+  const INBOX = `${R}/Inbox.md`;
+
+  it("rewrites links in other notes when a note is renamed", async () => {
+    const store = await fresh();
+    await store.getState().renamePath(ROADMAP, "Plan");
+    expect(await backend.readNote(INBOX)).toContain("[the roadmap](Projects/Plan.md#next)");
+    expect(store.getState().toasts.at(-1)?.message).toBe("Updated links in 1 note");
+  });
+
+  it("rewrites links when the open note is renamed after its title", async () => {
+    const store = await fresh();
+    await store.getState().openNote(ROADMAP);
+    store.getState().updateContent(store.getState().content!.replace(/^# .*$/m, "# Plan"));
+    await vi.advanceTimersByTimeAsync(mod.TITLE_SYNC_MS);
+    expect(store.getState().activePath).toBe(`${R}/Projects/Plan.md`);
+    expect(await backend.readNote(INBOX)).toContain("[the roadmap](Projects/Plan.md#next)");
+  });
+
+  it("rewrites links into a folder that moved", async () => {
+    const store = await fresh();
+    await store.getState().movePath(`${R}/Projects`, `${R}/Journal`);
+    expect(await backend.readNote(INBOX)).toContain("[the roadmap](Journal/Projects/Roadmap.md#next)");
+  });
+
+  it("rewrites the open note's own links when it moves to another folder, keeping its edits", async () => {
+    const store = await fresh();
+    await store.getState().openNote(INBOX);
+    store.getState().updateContent(`${store.getState().content!}\nNot saved yet\n`);
+    await store.getState().movePath(INBOX, `${R}/Journal`);
+    const moved = `${R}/Journal/Inbox.md`;
+    expect(store.getState().activePath).toBe(moved);
+    await store.getState().flushSave();
+    const text = await backend.readNote(moved);
+    expect(text).toContain("[the roadmap](../Projects/Roadmap.md#next)");
+    expect(text).toContain("Not saved yet");
+  });
+
+  it("reports a note it can't update and still updates the others", async () => {
+    const store = await fresh();
+    const other = `${R}/Reading/Links.md`;
+    await backend.writeNote(other, "# Links\n\n[plan](../Projects/Roadmap.md)\n");
+    const read = backend.readNote.bind(backend);
+    backend.readNote = async (path) => {
+      if (path === INBOX) throw new Error("locked");
+      return read(path);
+    };
+    await store.getState().renamePath(ROADMAP, "Plan");
+    expect(await read(other)).toContain("[plan](../Projects/Plan.md)");
+    const messages = store.getState().toasts.map((t) => t.message);
+    expect(messages).toContain("Could not update links in “Inbox”");
+    expect(messages).toContain("Updated links in 1 note");
+  });
+
+  it("writes nothing else when no link leads to what moved", async () => {
+    const store = await fresh();
+    backend.writes = [];
+    await store.getState().renamePath(`${R}/Journal/2026-11-03.md`, "Monday");
+    // Only the renamed note's own heading, which followed its new name.
+    expect(backend.writes.map(([path]) => path)).toEqual([`${R}/Journal/Monday.md`]);
+    expect(store.getState().toasts.some((t) => t.message.startsWith("Updated links"))).toBe(false);
+  });
+});
+
 describe("toasts and confirmation", () => {
   it("toasts dismiss themselves and play an exit before disappearing", async () => {
     const store = await fresh();

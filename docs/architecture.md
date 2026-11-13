@@ -63,8 +63,8 @@ recently, and the file watcher. Its rules:
 for files: list the vault, read and write notes, create, rename and delete,
 search, watch, save attachments, list images, and turn a file into a URL an
 `<img>` or the PDF viewer can load. It also holds the path helpers shared by
-both sides of the app (joining, resolving relative links, checking a path is
-inside a folder).
+both sides of the app (joining, resolving and writing relative links, checking
+a path is inside a folder).
 
 - `tauri.ts` implements it with Tauri commands. Attachments are sent as raw
   bytes rather than JSON, so large images and PDFs stay fast.
@@ -106,6 +106,7 @@ The other modules are small and mostly pure, which keeps them easy to test:
 | `appCommands.ts` | Every command (title, shortcut, when it's available, what it runs). The command palette, the keyboard shortcuts and the menu bar all read this one list. |
 | `menuBridge.ts` | Runs a menu bar item's command, and ignores the echo when a shortcut reaches the app both as a key press and as a menu event. |
 | `title.ts` | A note's title (its first `#` heading) and the file name made from it. |
+| `relink.ts` | The link edits that keep a note's links working after a file or folder moves. |
 | `treeSort.ts` | Sorting the sidebar by name, last edited or date created. |
 | `attachments.ts`, `attachmentUsage.ts` | Naming and linking pasted images; finding which notes use each image. |
 | `fileDrops.ts` | Recognising files dropped on the window. |
@@ -190,6 +191,26 @@ drop to zero when the system asks for reduced motion.
 Switching notes, closing the vault, closing the window and quitting all save
 first. If the first heading changed, the file is renamed to match once you
 pause, and the sidebar, history and recent notes follow the new path.
+
+### Renames and moves
+
+Renaming or moving anything (in the sidebar, with F2, or by retitling a note)
+takes one turn in the file-operation queue. In that turn the file is renamed,
+every remembered path (history, recent notes, caret positions) is remapped, and
+then every note is checked for links that the move broke:
+
+- links into what moved, from any note;
+- links out of a note that now sits in another folder.
+
+`relink.ts` finds them with the editor's own Markdown parser, so links in code
+are never touched, and rewrites only their path, keeping the `#heading`, title
+and link text. Each link then leads where it did before, and one that was
+already broken stays broken. Notes that aren't open are rewritten on disk; the
+open note is changed in the editor, outside its undo history, so unsaved edits
+and the caret stay put and undo can't break the links again. Wiki links,
+absolute paths and HTML `<img>` tags are left as they are, as are renames made
+by other apps, which Margin only sees as a file going away and another
+appearing.
 
 ### Changes from other apps
 

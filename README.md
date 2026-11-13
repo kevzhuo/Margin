@@ -105,6 +105,9 @@ It never edits your PDFs.
   name, last edited or date created.
 - **A note's title is its file name.** Edit the first heading and the file is
   renamed to match; rename the file and the heading follows.
+- **Links follow your notes.** Rename or move a note, PDF or folder and every
+  link to it is updated, and so are the links inside a note you move to another
+  folder. That includes the renames that follow a note's title as you edit it.
 - **Safe saving.** Notes save automatically as you type, never leave a
   half-written file behind, and are saved before the app quits. Changes made by
   other apps (or another computer, through sync) appear on their own.
@@ -202,9 +205,8 @@ How the live preview, saving and the rest work under the hood is described in
 
 ## Roadmap
 
-Margin is young but complete enough for daily notes. Next up: keeping image and
-note links working when notes are moved or renamed, wiki links and backlinks,
-and export to PDF and HTML.
+Margin is young but complete enough for daily notes. Next up: wiki links and
+backlinks, and export to PDF and HTML.
 
 ## License
 
